@@ -26,16 +26,8 @@ function FU:UnlockChatFrame(chatFrame)
     chatFrame:SetMovable(true)
     chatFrame:SetClampedToScreen(true)
 
-    -- Allow the frame to be resized.
+    -- Allow the frame to be resized (no bounds - full user control)
     chatFrame:SetResizable(true)
-    if chatFrame.SetResizeBounds then
-        -- Modern API (Dragonflight+)
-        chatFrame:SetResizeBounds(200, 100, 800, 600)
-    elseif chatFrame.SetMinResize and chatFrame.SetMaxResize then
-        -- Legacy API (Classic/TBC)
-        chatFrame:SetMinResize(200, 100)
-        chatFrame:SetMaxResize(800, 600)
-    end
 
     -- Show the resize button if it exists.
     local resizeButton = _G[frameName .. "ResizeButton"]
