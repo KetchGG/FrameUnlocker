@@ -18,6 +18,9 @@ function FU:CreateOptionsPanel()
     local panel = CreateFrame("Frame")
     panel.name = "FrameUnlocker"
 
+    -- Flag to prevent OnValueChanged firing during refresh (used by slider)
+    local isRefreshing = false
+
     -- Get version from TOC
     local version = C_AddOns and C_AddOns.GetAddOnMetadata(addonName, "Version") 
         or GetAddOnMetadata(addonName, "Version") 
@@ -103,7 +106,7 @@ function FU:CreateOptionsPanel()
     -- Slider: Raid frame scale
     local sliderLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     sliderLabel:SetPoint("TOPLEFT", 20, yOffset)
-    sliderLabel:SetText("Scale: 80%")
+    sliderLabel:SetText("Scale: 100%")
 
     yOffset = yOffset - 20
 
@@ -137,9 +140,6 @@ function FU:CreateOptionsPanel()
     slider.High:SetText("150%")
     slider.Text:SetText("")
 
-    -- Flag to prevent OnValueChanged firing during refresh
-    local isRefreshing = false
-
     slider:SetScript("OnValueChanged", function(self, value)
         if isRefreshing then return end
         value = math.floor(value * 20 + 0.5) / 20  -- Round to nearest 0.05
@@ -149,6 +149,50 @@ function FU:CreateOptionsPanel()
             FU:ApplyRaidFrameScale(value)
         end
     end)
+
+    yOffset = yOffset - 50
+
+    ---------------------------------------------------------------------
+    -- Reset to Defaults Button
+    ---------------------------------------------------------------------
+
+    local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    resetButton:SetPoint("TOPLEFT", 16, yOffset)
+    resetButton:SetSize(140, 22)
+    resetButton:SetText("Reset to Defaults")
+    resetButton:SetScript("OnClick", function()
+        FU:ResetToDefaults()
+        panel.refresh()
+        FU:ApplyAllSettings()
+        FU:Print("Settings reset to defaults.")
+    end)
+
+    yOffset = yOffset - 50
+
+    ---------------------------------------------------------------------
+    -- Slash Commands Reference
+    ---------------------------------------------------------------------
+
+    local cmdHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    cmdHeader:SetPoint("TOPLEFT", 16, yOffset)
+    cmdHeader:SetText("Slash Commands")
+    cmdHeader:SetTextColor(1, 0.82, 0)
+    yOffset = yOffset - 20
+
+    local commands = {
+        "/fu - Open this settings panel",
+        "/fu unlock - Force unlock chat",
+        "/fu lock - Force lock chat",
+        "/fu scale - Apply raid frame scale",
+        "/fu reset - Reset to defaults",
+    }
+
+    for _, cmdText in ipairs(commands) do
+        local cmdLine = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        cmdLine:SetPoint("TOPLEFT", 20, yOffset)
+        cmdLine:SetText("|cff888888" .. cmdText .. "|r")
+        yOffset = yOffset - 14
+    end
 
     -- Store references for refresh
     panel.chatCheck = chatCheck
@@ -164,7 +208,7 @@ function FU:CreateOptionsPanel()
         isRefreshing = true
         chatCheck:SetChecked(FU:Get("unlockChat"))
         raidCheck:SetChecked(FU:Get("scaleRaidFrames"))
-        local scale = FU:Get("raidFrameScale") or 0.8
+        local scale = FU:Get("raidFrameScale") or 1.0
         slider:SetValue(scale)
         sliderLabel:SetText("Scale: " .. math.floor(scale * 100) .. "%")
         isRefreshing = false

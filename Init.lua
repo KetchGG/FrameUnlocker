@@ -58,7 +58,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             EditModeManager:HookScript("OnHide", OnEditModeExit)
         end
 
-        FU:Print("Initialized. Type /fu for help.")
+        FU:Print("Initialized. Type /fu for options.")
     end
 end)
 
@@ -83,12 +83,14 @@ SlashCmdList.FRAMEUNLOCKER = function(msg)
     elseif msg == "scale" then
         FU:ApplyRaidFrameScale()
         FU:Print("Raid frame scale applied.")
+    elseif msg == "reset" then
+        FU:ResetToDefaults()
+        if FU.optionsPanel and FU.optionsPanel.refresh then
+            FU.optionsPanel.refresh()
+        end
+        FU:ApplyAllSettings()
+        FU:Print("Settings reset to defaults.")
     else
-        FU:Print("Commands:")
-        FU:Print("  /fu - Help menu")
-        FU:Print("  /fu options - Open settings")
-        FU:Print("  /fu unlock - Force unlock chat")
-        FU:Print("  /fu lock - Force lock chat")
-        FU:Print("  /fu scale - Apply raid frame scale")
+        FU:OpenOptions()
     end
 end

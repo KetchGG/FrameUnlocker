@@ -41,15 +41,19 @@ function FU:UnlockChatFrame(chatFrame)
     chatTab:RegisterForDrag("LeftButton")
 
     -- Use HookScript to avoid taint issues with protected frames
-    chatTab:HookScript("OnDragStart", function()
-        if chatFrame:IsMovable() then
-            chatFrame:StartMoving()
-        end
-    end)
+    -- Only hook once to prevent stacking on repeated calls
+    if not chatTab.FU_Hooked then
+        chatTab:HookScript("OnDragStart", function()
+            if chatFrame:IsMovable() then
+                chatFrame:StartMoving()
+            end
+        end)
 
-    chatTab:HookScript("OnDragStop", function()
-        chatFrame:StopMovingOrSizing()
-    end)
+        chatTab:HookScript("OnDragStop", function()
+            chatFrame:StopMovingOrSizing()
+        end)
+        chatTab.FU_Hooked = true
+    end
 end
 
 function FU:LockChatFrame(chatFrame)
@@ -81,9 +85,8 @@ function FU:LockChatFrame(chatFrame)
     end
 
     -- Remove drag registration (empty args clears all drag buttons)
+    -- Note: HookScript handlers remain but are guarded by IsMovable() check
     chatTab:RegisterForDrag()
-    chatTab:SetScript("OnDragStart", nil)
-    chatTab:SetScript("OnDragStop", nil)
 end
 
 ---------------------------------------------------------------------
@@ -92,7 +95,7 @@ end
 
 function FU:ApplyRaidFrameScale(scale)
     if CompactRaidFrameContainer then
-        CompactRaidFrameContainer:SetScale(scale or self:Get("raidFrameScale") or 0.8)
+        CompactRaidFrameContainer:SetScale(scale or self:Get("raidFrameScale") or 1.0)
     end
 end
 
@@ -104,4 +107,17 @@ function FU:Print(msg)
     if DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage("|cff2BB673[FU]|r " .. msg)
     end
+end
+
+---------------------------------------------------------------------
+-- Apply all settings (used by reset and initialization)
+---------------------------------------------------------------------
+
+function FU:ApplyAllSettings()
+    if self:Get("unlockChat") then
+        self:UnlockChatFrame(ChatFrame1)
+    else
+        self:LockChatFrame(ChatFrame1)
+    end
+    self:ApplyRaidFrameScale(self:Get("scaleRaidFrames") and self:Get("raidFrameScale") or 1.0)
 end

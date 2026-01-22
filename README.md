@@ -17,16 +17,18 @@ Unlock and customize your UI frames. Drag chat by its tab, resize it from the co
 ### Settings Panel
 - Full options UI integrated into the AddOns menu
 - All preferences persist between sessions
+- Reset to defaults button
+- Slash commands reference
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/fu` | Show help |
-| `/fu options` | Open settings panel |
+| `/fu` | Open settings panel |
 | `/fu unlock` | Force unlock chat |
 | `/fu lock` | Lock chat |
 | `/fu scale` | Apply raid frame scale |
+| `/fu reset` | Reset all settings to defaults |
 
 ## Supported Versions
 

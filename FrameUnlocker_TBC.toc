@@ -2,7 +2,7 @@
 ## Title: FrameUnlocker
 ## Notes: Unlock and customize UI frames - chat dragging, raid frame scaling, and more.
 ## Author: Ketch
-## Version: 1.2.0
+## Version: 1.2.3
 ## IconTexture: Interface\AddOns\FrameUnlocker\logo.png
 ## SavedVariables: FrameUnlockerDB
 
