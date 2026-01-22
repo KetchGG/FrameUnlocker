@@ -1,6 +1,6 @@
 # Changelog
 
-## Version 1.2.3
+## Version 1.2.2
 ### New Features
 - **Reset to Defaults** - Added button in settings panel to reset all options
 - **Slash Commands in Settings** - Commands reference now shown in the options panel
@@ -11,8 +11,6 @@
 - Fixed hook stacking bug when chat was re-unlocked after Edit Mode
 - Extracted shared settings application logic for consistency
 - Added key validation to prevent setting unknown config values
-
-## Version 1.2.2
 - Raid frame scaling now defaults to off
 - Default scale changed from 80% to 100%
 
