@@ -1,7 +1,12 @@
-## Interface: 20500
+## Interface: 20504
 ## Title: FrameUnlocker
-## Notes: Unlocks the General chat frame for moving via its tab.
+## Notes: Unlock and customize UI frames - chat dragging, raid frame scaling, and more.
 ## Author: Ketch
 ## Version: 1.2.0
+## IconTexture: Interface\AddOns\FrameUnlocker\logo.png
+## SavedVariables: FrameUnlockerDB
 
-FrameUnlocker.lua
+Config.lua
+Core.lua
+Options.lua
+Init.lua
