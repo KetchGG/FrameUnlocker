@@ -1,0 +1,7 @@
+## Interface: 20500
+## Title: FrameUnlocker
+## Notes: Unlocks the General chat frame for moving via its tab.
+## Author: Ketch
+## Version: 1.2.0
+
+FrameUnlocker.lua
