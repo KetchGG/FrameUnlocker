@@ -10,6 +10,14 @@ FU.defaults = {
     unlockChat = true,
     scaleRaidFrames = false,
     raidFrameScale = 1.0,
+    scalePartyFrames = false,
+    partyFrameScale = 1.0,
+    scaleStatusBars = false,
+    statusBarScale = 1.0,
+    scaleLootFrames = false,
+    lootFrameScale = 1.0,
+    lootFrameX = false,  -- false = use default position
+    lootFrameY = false,
 }
 
 -- Initialize saved variables

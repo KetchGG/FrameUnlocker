@@ -20,6 +20,43 @@ local function OnEditModeExit()
 end
 
 ---------------------------------------------------------------------
+-- Reapply scaling settings (called on various UI update events)
+---------------------------------------------------------------------
+
+local function ReapplyScaling()
+    if FU:Get("scaleRaidFrames") then
+        FU:ApplyRaidFrameScale()
+    end
+    if FU:Get("scalePartyFrames") then
+        FU:ApplyPartyFrameScale()
+    end
+    if FU:Get("scaleStatusBars") then
+        FU:ApplyStatusBarScale()
+    end
+    if FU:Get("scaleLootFrames") then
+        FU:ApplyLootFrameScale()
+    end
+    FU:ApplyLootFramePosition()
+end
+
+---------------------------------------------------------------------
+-- Throttle helper to prevent rapid-fire event handling
+---------------------------------------------------------------------
+
+local pendingTimers = {}
+
+local function ThrottledCall(key, delay, func)
+    if pendingTimers[key] then
+        return  -- Already scheduled
+    end
+    pendingTimers[key] = true
+    C_Timer.After(delay, function()
+        pendingTimers[key] = nil
+        func()
+    end)
+end
+
+---------------------------------------------------------------------
 -- Event frame
 ---------------------------------------------------------------------
 
@@ -47,9 +84,13 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             FU:UnlockChatFrame(ChatFrame1)
         end
 
-        if FU:Get("scaleRaidFrames") then
-            FU:ApplyRaidFrameScale()
-        end
+        ReapplyScaling()
+        FU:HookLootFramePosition()
+
+        -- Register events that may require reapplying settings
+        self:RegisterEvent("GROUP_ROSTER_UPDATE")
+        self:RegisterEvent("UI_SCALE_CHANGED")
+        self:RegisterEvent("PLAYER_ENTERING_WORLD")
 
         -- Hook Edit Mode (frames exist now after login)
         if EditModeManagerFrame then
@@ -58,7 +99,37 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             EditModeManager:HookScript("OnHide", OnEditModeExit)
         end
 
+        -- Hook raid frame layout updates (if available)
+        if CompactRaidFrameContainer and CompactRaidFrameContainer.ApplyToFrames then
+            hooksecurefunc(CompactRaidFrameContainer, "ApplyToFrames", function()
+                if FU:Get("scaleRaidFrames") then
+                    ThrottledCall("raidLayout", 0.1, function()
+                        FU:ApplyRaidFrameScale()
+                    end)
+                end
+            end)
+        end
+
         FU:Print("Initialized. Type /fu for options.")
+
+    elseif event == "GROUP_ROSTER_UPDATE" then
+        -- Reapply party/raid scaling when group composition changes (throttled)
+        ThrottledCall("groupRoster", 0.3, function()
+            if FU:Get("scaleRaidFrames") then
+                FU:ApplyRaidFrameScale()
+            end
+            if FU:Get("scalePartyFrames") then
+                FU:ApplyPartyFrameScale()
+            end
+        end)
+
+    elseif event == "UI_SCALE_CHANGED" then
+        -- Reapply all scaling after UI scale change
+        ThrottledCall("uiScale", 0.3, ReapplyScaling)
+
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        -- Reapply after loading screens (throttled to avoid spam)
+        ThrottledCall("enterWorld", 0.5, ReapplyScaling)
     end
 end)
 
@@ -74,15 +145,15 @@ SlashCmdList.FRAMEUNLOCKER = function(msg)
 
     if msg == "options" or msg == "config" or msg == "settings" then
         FU:OpenOptions()
-    elseif msg == "unlock" then
-        FU:UnlockChatFrame(ChatFrame1)
-        FU:Print("Chat unlocked.")
-    elseif msg == "lock" then
-        FU:LockChatFrame(ChatFrame1)
-        FU:Print("Chat locked.")
-    elseif msg == "scale" then
-        FU:ApplyRaidFrameScale()
-        FU:Print("Raid frame scale applied.")
+    elseif msg == "loot" then
+        -- Enable loot frame customization if not already enabled
+        if not FU:Get("scaleLootFrames") then
+            FU:Set("scaleLootFrames", true)
+            if FU.optionsPanel and FU.optionsPanel.refresh then
+                FU.optionsPanel.refresh()
+            end
+        end
+        FU:ToggleLootAnchor()
     elseif msg == "reset" then
         FU:ResetToDefaults()
         if FU.optionsPanel and FU.optionsPanel.refresh then

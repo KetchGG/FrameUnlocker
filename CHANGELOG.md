@@ -1,5 +1,27 @@
 # Changelog
 
+## Version 1.3.0
+### New Features
+- **Party Frame Scaling** - Scale party frames from 50% to 150%
+- **Status Bar Scaling** - Scale XP, reputation, and honor bars
+- **Loot Roll Frame Scaling** - Scale group loot roll frames
+- **Loot Frame Positioning** - Move loot roll frames anywhere on screen with a draggable anchor
+- `/fu loot` - New command to toggle loot frame positioning anchor
+
+### Improvements
+- **Two-column layout** - Related scaling options now grouped side-by-side
+- **Visual dividers** - Cleaner separation between settings sections
+- **Author credit** - "by Ketch" now displayed in settings panel
+- **Smart button states** - Move/Reset buttons disabled when loot scaling is off
+- **Throttled event handling** - Improved performance during group changes and loading screens
+- **Persistent scaling** - Settings automatically reapply after UI changes, group updates, and zone transitions
+- Removed `/fu unlock`, `/fu lock`, `/fu scale` commands (use settings panel instead)
+
+### Technical
+- Added hooks for GROUP_ROSTER_UPDATE, UI_SCALE_CHANGED, PLAYER_ENTERING_WORLD events
+- Added CompactRaidFrameContainer layout hook for raid profile changes
+- Consolidated duplicate code and added throttling helpers
+
 ## Version 1.2.2
 ### New Features
 - **Reset to Defaults** - Added button in settings panel to reset all options
