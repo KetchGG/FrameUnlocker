@@ -107,7 +107,7 @@ function FU:ApplyPartyFrameScale(scale)
     scale = scale or self:Get("partyFrameScale") or 1.0
     local scaled = false
     
-    -- Modern party frame container (Dragonflight+/TBC Anniversary)
+    -- Modern party frame container (Midnight/TBC Anniversary)
     if PartyFrame then
         PartyFrame:SetScale(scale)
         scaled = true
