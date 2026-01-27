@@ -343,6 +343,7 @@ end
 -- Hook to reapply position after Blizzard resets it
 function FU:HookLootFramePosition()
     if GroupLootContainer and not self.lootFrameHooked then
+        local pendingReposition = false
         hooksecurefunc(GroupLootContainer, "SetPoint", function()
             -- Only override if loot frame scaling is enabled and we have a saved position
             if not FU:Get("scaleLootFrames") then
@@ -351,13 +352,236 @@ function FU:HookLootFramePosition()
             local x = FU:Get("lootFrameX")
             local y = FU:Get("lootFrameY")
             if x and x ~= false and y and y ~= false then
-                -- Delay slightly to avoid infinite loop
-                C_Timer.After(0.01, function()
+                -- Throttle to prevent rapid-fire repositioning
+                if pendingReposition then
+                    return
+                end
+                pendingReposition = true
+                C_Timer.After(0.05, function()
+                    pendingReposition = false
                     FU:ApplyLootFramePosition()
                 end)
             end
         end)
         self.lootFrameHooked = true
+    end
+end
+
+---------------------------------------------------------------------
+-- Arena/Flag Carrier Frame Anchor and Scaling
+---------------------------------------------------------------------
+
+-- Create the draggable anchor frame for arena frames
+function FU:CreateArenaAnchor()
+    if self.arenaAnchor then
+        return self.arenaAnchor
+    end
+    
+    local anchor = CreateFrame("Frame", "FUArenaAnchor", UIParent, "BackdropTemplate")
+    anchor:SetSize(180, 50)
+    anchor:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -100, -200)
+    anchor:SetMovable(true)
+    anchor:EnableMouse(true)
+    anchor:SetClampedToScreen(true)
+    anchor:RegisterForDrag("LeftButton")
+    anchor:Hide()
+    
+    -- Visual styling (purple/red for PvP theme)
+    anchor:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    anchor:SetBackdropColor(0.6, 0.1, 0.3, 0.9)
+    anchor:SetBackdropBorderColor(0.8, 0.2, 0.4, 1)
+    
+    -- Label
+    local label = anchor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    label:SetPoint("TOP", 0, -8)
+    label:SetText("Arena/Flag Carrier Anchor")
+    
+    -- Scale button (opens options)
+    local scaleBtn = CreateFrame("Button", nil, anchor, "UIPanelButtonTemplate")
+    scaleBtn:SetSize(70, 20)
+    scaleBtn:SetPoint("BOTTOMLEFT", 8, 6)
+    scaleBtn:SetText("Scale")
+    scaleBtn:SetScript("OnClick", function()
+        FU:OpenOptions()
+    end)
+    
+    -- Lock button
+    local lockBtn = CreateFrame("Button", nil, anchor, "UIPanelButtonTemplate")
+    lockBtn:SetSize(70, 20)
+    lockBtn:SetPoint("BOTTOMRIGHT", -8, 6)
+    lockBtn:SetText("Lock")
+    lockBtn:SetScript("OnClick", function()
+        FU:HideArenaAnchor()
+        -- Update options panel button if it exists
+        if FU.optionsPanel and FU.optionsPanel.arenaAnchorButton then
+            FU.optionsPanel.arenaAnchorButton:SetText("Move")
+        end
+    end)
+    
+    -- Drag handlers
+    anchor:SetScript("OnDragStart", function(self)
+        self:StartMoving()
+    end)
+    
+    anchor:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        -- Save position using TOPRIGHT relative to screen
+        local right = self:GetRight()
+        local top = self:GetTop()
+        local screenW = UIParent:GetWidth()
+        local screenH = UIParent:GetHeight()
+        FU:Set("arenaFrameX", right - screenW)  -- negative offset from right
+        FU:Set("arenaFrameY", top - screenH)    -- negative offset from top
+        -- Apply to arena container
+        FU:ApplyArenaFramePosition()
+    end)
+    
+    self.arenaAnchor = anchor
+    return anchor
+end
+
+function FU:ShowArenaAnchor()
+    local anchor = self:CreateArenaAnchor()
+    
+    -- Position anchor at saved location or default arena position
+    local x = self:Get("arenaFrameX")
+    local y = self:Get("arenaFrameY")
+    anchor:ClearAllPoints()
+    if x and x ~= false and y and y ~= false then
+        anchor:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", x, y)
+    else
+        -- Default to right side where arena frames usually appear
+        anchor:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -100, -200)
+    end
+    
+    anchor:Show()
+    self:Print("Drag the anchor to reposition arena/flag carrier frames. Click 'Lock' when done.")
+end
+
+function FU:HideArenaAnchor()
+    if self.arenaAnchor then
+        -- Save position before hiding using TOPRIGHT
+        local right = self.arenaAnchor:GetRight()
+        local top = self.arenaAnchor:GetTop()
+        if right and top then
+            local screenW = UIParent:GetWidth()
+            local screenH = UIParent:GetHeight()
+            self:Set("arenaFrameX", right - screenW)
+            self:Set("arenaFrameY", top - screenH)
+            self:ApplyArenaFramePosition()
+        end
+        self.arenaAnchor:Hide()
+        self:Print("Arena/flag carrier frame position saved.")
+    end
+end
+
+function FU:ToggleArenaAnchor()
+    if self.arenaAnchor and self.arenaAnchor:IsShown() then
+        self:HideArenaAnchor()
+        return false
+    else
+        self:ShowArenaAnchor()
+        return true
+    end
+end
+
+function FU:ApplyArenaFramePosition()
+    -- Only apply custom position if arena frame scaling is enabled
+    if not self:Get("scaleArenaFrames") then
+        return
+    end
+    
+    local x = self:Get("arenaFrameX")
+    local y = self:Get("arenaFrameY")
+    
+    if not x or x == false or not y or y == false then
+        return  -- Use default position
+    end
+    
+    -- Apply custom position to ArenaEnemyFrames container using TOPRIGHT
+    if ArenaEnemyFrames then
+        ArenaEnemyFrames:ClearAllPoints()
+        ArenaEnemyFrames:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", x, y)
+    end
+end
+
+-- Reset arena frame to default position (shared logic)
+local function ResetArenaContainerToDefault()
+    if ArenaEnemyFrames then
+        ArenaEnemyFrames:ClearAllPoints()
+        -- Default arena frames position (right side of screen)
+        ArenaEnemyFrames:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -100, -200)
+    end
+end
+
+-- Reset arena frame to default position without clearing saved coordinates
+function FU:ResetArenaFrameToDefault()
+    ResetArenaContainerToDefault()
+end
+
+function FU:ResetArenaFramePosition()
+    -- Clear saved position
+    self:Set("arenaFrameX", false)
+    self:Set("arenaFrameY", false)
+    
+    -- Hide anchor if shown
+    if self.arenaAnchor and self.arenaAnchor:IsShown() then
+        self.arenaAnchor:Hide()
+        if self.optionsPanel and self.optionsPanel.arenaAnchorButton then
+            self.optionsPanel.arenaAnchorButton:SetText("Move")
+        end
+    end
+    
+    ResetArenaContainerToDefault()
+    self:Print("Arena/flag carrier frame position reset to default.")
+end
+
+function FU:ApplyArenaFrameScale(scale)
+    scale = scale or self:Get("arenaFrameScale") or 1.0
+    
+    -- Scale the main container
+    if ArenaEnemyFrames then
+        ArenaEnemyFrames:SetScale(scale)
+    end
+    
+    -- Also scale individual arena frames if they exist (fallback)
+    for i = 1, 5 do
+        local frame = _G["ArenaEnemyFrame" .. i]
+        if frame then
+            frame:SetScale(scale)
+        end
+    end
+end
+
+-- Hook to reapply position after Blizzard resets it
+function FU:HookArenaFramePosition()
+    if ArenaEnemyFrames and not self.arenaFrameHooked then
+        local pendingReposition = false
+        hooksecurefunc(ArenaEnemyFrames, "SetPoint", function()
+            -- Only override if arena frame scaling is enabled and we have a saved position
+            if not FU:Get("scaleArenaFrames") then
+                return
+            end
+            local x = FU:Get("arenaFrameX")
+            local y = FU:Get("arenaFrameY")
+            if x and x ~= false and y and y ~= false then
+                -- Throttle to prevent rapid-fire repositioning
+                if pendingReposition then
+                    return
+                end
+                pendingReposition = true
+                C_Timer.After(0.05, function()
+                    pendingReposition = false
+                    FU:ApplyArenaFramePosition()
+                end)
+            end
+        end)
+        self.arenaFrameHooked = true
     end
 end
 
@@ -386,4 +610,6 @@ function FU:ApplyAllSettings()
     self:ApplyStatusBarScale(self:Get("scaleStatusBars") and self:Get("statusBarScale") or 1.0)
     self:ApplyLootFrameScale(self:Get("scaleLootFrames") and self:Get("lootFrameScale") or 1.0)
     self:ApplyLootFramePosition()
+    self:ApplyArenaFrameScale(self:Get("scaleArenaFrames") and self:Get("arenaFrameScale") or 1.0)
+    self:ApplyArenaFramePosition()
 end

@@ -21,10 +21,12 @@ function FU:CreateOptionsPanel()
     -- Flag to prevent OnValueChanged firing during refresh (used by slider)
     local isRefreshing = false
 
-    -- Layout constants
-    local LEFT_COL = 16
-    local RIGHT_COL = 230
-    local SLIDER_WIDTH = 180
+    -- Layout constants (3-column layout)
+    local COL1 = 16
+    local COL2 = 170
+    local COL3 = 324
+    local SLIDER_WIDTH = 130
+    local SLIDER_HEIGHT = 15
 
     -- Get version from TOC
     local version = C_AddOns and C_AddOns.GetAddOnMetadata(addonName, "Version") 
@@ -63,7 +65,7 @@ function FU:CreateOptionsPanel()
     local function CreateDivider(parent, yPos)
         local divider = parent:CreateTexture(nil, "ARTWORK")
         divider:SetHeight(1)
-        divider:SetPoint("TOPLEFT", LEFT_COL, yPos)
+        divider:SetPoint("TOPLEFT", COL1, yPos)
         divider:SetPoint("TOPRIGHT", -16, yPos)
         divider:SetColorTexture(0.5, 0.5, 0.5, 0.5)
         return divider
@@ -108,7 +110,7 @@ function FU:CreateOptionsPanel()
         slider:SetValueStep(0.05)
         slider:SetObeyStepOnDrag(true)
         slider:SetWidth(SLIDER_WIDTH)
-        slider:SetHeight(20)
+        slider:SetHeight(SLIDER_HEIGHT)
 
         if slider.SetBackdrop then
             slider:SetBackdrop({
@@ -147,18 +149,21 @@ function FU:CreateOptionsPanel()
     end
 
     ---------------------------------------------------------------------
-    -- Chat Unlock Section
+    -- Misc UI Section (Chat on own row, then Status bars + Loot frames)
     ---------------------------------------------------------------------
 
-    local chatHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    chatHeader:SetPoint("TOPLEFT", LEFT_COL, yOffset)
-    chatHeader:SetText("Chat Frame")
-    chatHeader:SetTextColor(1, 0.82, 0)
-    yOffset = yOffset - 25
+    local miscHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    miscHeader:SetPoint("TOPLEFT", COL1, yOffset)
+    miscHeader:SetText("Misc UI")
+    miscHeader:SetTextColor(1, 0.82, 0)
+    yOffset = yOffset - 18
+    CreateDivider(panel, yOffset)
+    yOffset = yOffset - 12
 
+    -- Chat unlock (own row)
     local chatCheck = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
-    chatCheck:SetPoint("TOPLEFT", LEFT_COL, yOffset)
-    chatCheck.Text:SetText("Unlock chat frame (drag by tab, resize from corner)")
+    chatCheck:SetPoint("TOPLEFT", COL1, yOffset)
+    chatCheck.Text:SetText("Unlock chat frame")
     chatCheck:SetScript("OnClick", function(self)
         FU:Set("unlockChat", self:GetChecked())
         if self:GetChecked() then
@@ -168,71 +173,32 @@ function FU:CreateOptionsPanel()
         end
     end)
 
-    yOffset = yOffset - 45
+    -- Chat description (on second line)
+    local chatDesc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    chatDesc:SetPoint("TOPLEFT", COL1 + 26, yOffset - 20)
+    chatDesc:SetText("|cff888888Drag by tab, resize from corner|r")
 
-    -- Divider before Group Frames
-    CreateDivider(panel, yOffset)
-    yOffset = yOffset - 15
+    yOffset = yOffset - 50
 
-    ---------------------------------------------------------------------
-    -- Group Frames Section (Raid + Party side by side)
-    ---------------------------------------------------------------------
-
-    local groupHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    groupHeader:SetPoint("TOPLEFT", LEFT_COL, yOffset)
-    groupHeader:SetText("Group Frames")
-    groupHeader:SetTextColor(1, 0.82, 0)
-    yOffset = yOffset - 25
-
-    -- Raid frames (left column)
-    local raidCheck, slider, sliderLabel = CreateScaleControl(
-        panel, LEFT_COL, yOffset,
-        "Raid frames", "scaleRaidFrames", "raidFrameScale",
-        FU.ApplyRaidFrameScale
-    )
-
-    -- Party frames (right column)
-    local partyCheck, partySlider, partySliderLabel = CreateScaleControl(
-        panel, RIGHT_COL, yOffset,
-        "Party frames", "scalePartyFrames", "partyFrameScale",
-        FU.ApplyPartyFrameScale
-    )
-
-    yOffset = yOffset - 95
-
-    -- Divider before Misc UI
-    CreateDivider(panel, yOffset)
-    yOffset = yOffset - 15
-
-    ---------------------------------------------------------------------
-    -- Misc UI Section
-    ---------------------------------------------------------------------
-
-    local miscHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    miscHeader:SetPoint("TOPLEFT", LEFT_COL, yOffset)
-    miscHeader:SetText("Misc UI")
-    miscHeader:SetTextColor(1, 0.82, 0)
-    yOffset = yOffset - 25
-
-    -- Status bars (left column)
+    -- Status bars (column 1)
     local statusCheck, statusSlider, statusSliderLabel = CreateScaleControl(
-        panel, LEFT_COL, yOffset,
-        "Status bars (XP, rep, honor)", "scaleStatusBars", "statusBarScale",
+        panel, COL1, yOffset,
+        "Status bars", "scaleStatusBars", "statusBarScale",
         FU.ApplyStatusBarScale
     )
 
-    -- Loot roll frames (right column)
+    -- Loot roll frames (column 2)
     local lootCheck, lootSlider, lootSliderLabel = CreateScaleControl(
-        panel, RIGHT_COL, yOffset,
-        "Loot roll frames", "scaleLootFrames", "lootFrameScale",
+        panel, COL2, yOffset,
+        "Loot rolls", "scaleLootFrames", "lootFrameScale",
         FU.ApplyLootFrameScale
     )
 
-    yOffset = yOffset - 85
+    yOffset = yOffset - 90
 
-    -- Move Loot Frames button
+    -- Move/Reset Loot Frames buttons (under column 2)
     local lootAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    lootAnchorButton:SetPoint("TOPLEFT", RIGHT_COL, yOffset)
+    lootAnchorButton:SetPoint("TOPLEFT", COL2, yOffset)
     lootAnchorButton:SetSize(60, 22)
     lootAnchorButton:SetText("Move")
     lootAnchorButton:SetScript("OnClick", function(self)
@@ -244,7 +210,6 @@ function FU:CreateOptionsPanel()
         end
     end)
 
-    -- Reset Loot Position button
     local lootResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     lootResetButton:SetPoint("LEFT", lootAnchorButton, "RIGHT", 4, 0)
     lootResetButton:SetSize(60, 22)
@@ -275,7 +240,6 @@ function FU:CreateOptionsPanel()
         if enabled then
             FU:ApplyLootFramePosition()
         else
-            -- Hide anchor if shown and reset to default
             if FU.lootAnchor and FU.lootAnchor:IsShown() then
                 FU.lootAnchor:Hide()
                 lootAnchorButton:SetText("Move")
@@ -284,18 +248,103 @@ function FU:CreateOptionsPanel()
         end
     end)
 
-    yOffset = yOffset - 30
+    yOffset = yOffset - 35
 
-    -- Divider after settings
+    ---------------------------------------------------------------------
+    -- Group & PvP Frames Section (Raid, Party, Arena - 3 columns)
+    ---------------------------------------------------------------------
+
+    local groupHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    groupHeader:SetPoint("TOPLEFT", COL1, yOffset)
+    groupHeader:SetText("Group & PvP Frames")
+    groupHeader:SetTextColor(1, 0.82, 0)
+    yOffset = yOffset - 18
     CreateDivider(panel, yOffset)
-    yOffset = yOffset - 15
+    yOffset = yOffset - 12
+
+    -- Raid frames (column 1)
+    local raidCheck, slider, sliderLabel = CreateScaleControl(
+        panel, COL1, yOffset,
+        "Raid frames", "scaleRaidFrames", "raidFrameScale",
+        FU.ApplyRaidFrameScale
+    )
+
+    -- Party frames (column 2)
+    local partyCheck, partySlider, partySliderLabel = CreateScaleControl(
+        panel, COL2, yOffset,
+        "Party frames", "scalePartyFrames", "partyFrameScale",
+        FU.ApplyPartyFrameScale
+    )
+
+    -- Arena/Flag carrier frames (column 3)
+    local arenaCheck, arenaSlider, arenaSliderLabel = CreateScaleControl(
+        panel, COL3, yOffset,
+        "Arena / Flag Carriers", "scaleArenaFrames", "arenaFrameScale",
+        FU.ApplyArenaFrameScale
+    )
+
+    yOffset = yOffset - 90
+
+    -- Move/Reset Arena Frames buttons (under column 3)
+    local arenaAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    arenaAnchorButton:SetPoint("TOPLEFT", COL3, yOffset)
+    arenaAnchorButton:SetSize(60, 22)
+    arenaAnchorButton:SetText("Move")
+    arenaAnchorButton:SetScript("OnClick", function(self)
+        local showing = FU:ToggleArenaAnchor()
+        if showing then
+            self:SetText("Lock")
+        else
+            self:SetText("Move")
+        end
+    end)
+
+    local arenaResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    arenaResetButton:SetPoint("LEFT", arenaAnchorButton, "RIGHT", 4, 0)
+    arenaResetButton:SetSize(60, 22)
+    arenaResetButton:SetText("Reset")
+    arenaResetButton:SetScript("OnClick", function()
+        FU:ResetArenaFramePosition()
+    end)
+
+    -- Helper to enable/disable arena position buttons
+    local function SetArenaButtonsEnabled(enabled)
+        if enabled then
+            arenaAnchorButton:Enable()
+            arenaAnchorButton:SetAlpha(1.0)
+            arenaResetButton:Enable()
+            arenaResetButton:SetAlpha(1.0)
+        else
+            arenaAnchorButton:Disable()
+            arenaAnchorButton:SetAlpha(0.5)
+            arenaResetButton:Disable()
+            arenaResetButton:SetAlpha(0.5)
+        end
+    end
+
+    -- Handle position and button state when arena scaling is toggled
+    arenaCheck:HookScript("OnClick", function(self)
+        local enabled = self:GetChecked()
+        SetArenaButtonsEnabled(enabled)
+        if enabled then
+            FU:ApplyArenaFramePosition()
+        else
+            if FU.arenaAnchor and FU.arenaAnchor:IsShown() then
+                FU.arenaAnchor:Hide()
+                arenaAnchorButton:SetText("Move")
+            end
+            FU:ResetArenaFrameToDefault()
+        end
+    end)
+
+    yOffset = yOffset - 40
 
     ---------------------------------------------------------------------
     -- Reset Button
     ---------------------------------------------------------------------
 
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    resetButton:SetPoint("TOPLEFT", LEFT_COL, yOffset)
+    resetButton:SetPoint("TOPLEFT", COL1, yOffset)
     resetButton:SetSize(140, 22)
     resetButton:SetText("Reset to Defaults")
     resetButton:SetScript("OnClick", function()
@@ -312,20 +361,23 @@ function FU:CreateOptionsPanel()
     ---------------------------------------------------------------------
 
     local cmdHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    cmdHeader:SetPoint("TOPLEFT", LEFT_COL, yOffset)
+    cmdHeader:SetPoint("TOPLEFT", COL1, yOffset)
     cmdHeader:SetText("Slash Commands")
     cmdHeader:SetTextColor(1, 0.82, 0)
-    yOffset = yOffset - 20
+    yOffset = yOffset - 18
+    CreateDivider(panel, yOffset)
+    yOffset = yOffset - 10
 
     local commands = {
-        "/fu - Open this settings panel",
-        "/fu loot - Move loot roll frames",
+        "/fu - Open settings",
+        "/fu loot - Move loot frames",
+        "/fu arena - Move arena frames",
         "/fu reset - Reset to defaults",
     }
 
     for _, cmdText in ipairs(commands) do
         local cmdLine = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        cmdLine:SetPoint("TOPLEFT", LEFT_COL + 4, yOffset)
+        cmdLine:SetPoint("TOPLEFT", COL1 + 4, yOffset)
         cmdLine:SetText("|cff888888" .. cmdText .. "|r")
         yOffset = yOffset - 14
     end
@@ -345,6 +397,11 @@ function FU:CreateOptionsPanel()
     panel.lootSlider = lootSlider
     panel.lootSliderLabel = lootSliderLabel
     panel.lootAnchorButton = lootAnchorButton
+    panel.arenaCheck = arenaCheck
+    panel.arenaSlider = arenaSlider
+    panel.arenaSliderLabel = arenaSliderLabel
+    panel.arenaAnchorButton = arenaAnchorButton
+    panel.SetArenaButtonsEnabled = SetArenaButtonsEnabled
 
     ---------------------------------------------------------------------
     -- Refresh function to sync UI with saved settings
@@ -380,11 +437,26 @@ function FU:CreateOptionsPanel()
         SetSliderEnabled(lootSlider, lootSliderLabel, lootEnabled)
         SetLootButtonsEnabled(lootEnabled)
         
-        -- Update anchor button text based on current state
+        -- Update loot anchor button text based on current state
         if FU.lootAnchor and FU.lootAnchor:IsShown() then
             lootAnchorButton:SetText("Lock")
         else
             lootAnchorButton:SetText("Move")
+        end
+        
+        local arenaEnabled = FU:Get("scaleArenaFrames")
+        arenaCheck:SetChecked(arenaEnabled)
+        local arenaScale = FU:Get("arenaFrameScale") or 1.0
+        arenaSlider:SetValue(arenaScale)
+        arenaSliderLabel:SetText("Scale: " .. math.floor(arenaScale * 100) .. "%")
+        SetSliderEnabled(arenaSlider, arenaSliderLabel, arenaEnabled)
+        SetArenaButtonsEnabled(arenaEnabled)
+        
+        -- Update arena anchor button text based on current state
+        if FU.arenaAnchor and FU.arenaAnchor:IsShown() then
+            arenaAnchorButton:SetText("Lock")
+        else
+            arenaAnchorButton:SetText("Move")
         end
         
         isRefreshing = false

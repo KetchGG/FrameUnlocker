@@ -37,6 +37,10 @@ local function ReapplyScaling()
         FU:ApplyLootFrameScale()
     end
     FU:ApplyLootFramePosition()
+    if FU:Get("scaleArenaFrames") then
+        FU:ApplyArenaFrameScale()
+    end
+    FU:ApplyArenaFramePosition()
 end
 
 ---------------------------------------------------------------------
@@ -86,11 +90,14 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 
         ReapplyScaling()
         FU:HookLootFramePosition()
+        FU:HookArenaFramePosition()
 
         -- Register events that may require reapplying settings
         self:RegisterEvent("GROUP_ROSTER_UPDATE")
         self:RegisterEvent("UI_SCALE_CHANGED")
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
+        self:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
+        self:RegisterEvent("ARENA_OPPONENT_UPDATE")
 
         -- Hook Edit Mode (frames exist now after login)
         if EditModeManagerFrame then
@@ -130,6 +137,15 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- Reapply after loading screens (throttled to avoid spam)
         ThrottledCall("enterWorld", 0.5, ReapplyScaling)
+
+    elseif event == "ARENA_PREP_OPPONENT_SPECIALIZATIONS" or event == "ARENA_OPPONENT_UPDATE" then
+        -- Reapply arena frame settings when entering arena/BG with flag carriers
+        ThrottledCall("arenaFrames", 0.3, function()
+            if FU:Get("scaleArenaFrames") then
+                FU:ApplyArenaFrameScale()
+                FU:ApplyArenaFramePosition()
+            end
+        end)
     end
 end)
 
@@ -154,6 +170,15 @@ SlashCmdList.FRAMEUNLOCKER = function(msg)
             end
         end
         FU:ToggleLootAnchor()
+    elseif msg == "arena" then
+        -- Enable arena frame customization if not already enabled
+        if not FU:Get("scaleArenaFrames") then
+            FU:Set("scaleArenaFrames", true)
+            if FU.optionsPanel and FU.optionsPanel.refresh then
+                FU.optionsPanel.refresh()
+            end
+        end
+        FU:ToggleArenaAnchor()
     elseif msg == "reset" then
         FU:ResetToDefaults()
         if FU.optionsPanel and FU.optionsPanel.refresh then

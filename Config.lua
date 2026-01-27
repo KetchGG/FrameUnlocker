@@ -18,6 +18,10 @@ FU.defaults = {
     lootFrameScale = 1.0,
     lootFrameX = false,  -- false = use default position
     lootFrameY = false,
+    scaleArenaFrames = false,
+    arenaFrameScale = 1.0,
+    arenaFrameX = false,  -- false = use default position
+    arenaFrameY = false,
 }
 
 -- Initialize saved variables
