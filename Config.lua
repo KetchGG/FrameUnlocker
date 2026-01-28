@@ -22,6 +22,10 @@ FU.defaults = {
     arenaFrameScale = 1.0,
     arenaFrameX = false,  -- false = use default position
     arenaFrameY = false,
+    scaleQuestTracker = false,
+    questTrackerScale = 1.0,
+    questTrackerX = false,  -- false = use default position
+    questTrackerY = false,
 }
 
 -- Initialize saved variables

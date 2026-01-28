@@ -41,6 +41,10 @@ local function ReapplyScaling()
         FU:ApplyArenaFrameScale()
     end
     FU:ApplyArenaFramePosition()
+    if FU:Get("scaleQuestTracker") then
+        FU:ApplyQuestTrackerScale()
+    end
+    FU:ApplyQuestTrackerPosition()
 end
 
 ---------------------------------------------------------------------
@@ -91,6 +95,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         ReapplyScaling()
         FU:HookLootFramePosition()
         FU:HookArenaFramePosition()
+        FU:HookQuestTrackerPosition()
 
         -- Register events that may require reapplying settings
         self:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -179,6 +184,15 @@ SlashCmdList.FRAMEUNLOCKER = function(msg)
             end
         end
         FU:ToggleArenaAnchor()
+    elseif msg == "quest" or msg == "tracker" then
+        -- Enable quest tracker customization if not already enabled
+        if not FU:Get("scaleQuestTracker") then
+            FU:Set("scaleQuestTracker", true)
+            if FU.optionsPanel and FU.optionsPanel.refresh then
+                FU.optionsPanel.refresh()
+            end
+        end
+        FU:ToggleQuestTrackerAnchor()
     elseif msg == "reset" then
         FU:ResetToDefaults()
         if FU.optionsPanel and FU.optionsPanel.refresh then

@@ -1,5 +1,29 @@
 # Changelog
 
+## Version 1.4.0
+### New Features
+- **Quest Tracker** - Scale and reposition the quest/objective tracker
+  - Draggable anchor for custom positioning
+  - Removed from Blizzard's managed frame system to prevent flickering
+  - Position and scale persist across sessions
+- **Arena / Flag Carrier Frames** - Scale and reposition arena enemy frames (also used for WSG/BG flag carriers)
+  - Draggable anchor for custom positioning
+  - Move and Reset buttons in settings
+- `/fu quest` - Toggle quest tracker positioning anchor
+- `/fu arena` - Toggle arena frames positioning anchor
+
+### Improvements
+- **Three-column layout** - More compact settings panel with better organization
+- **Reorganized sections** - Chat Frames, Group & PvP Frames, Misc Frames
+- **Reset buttons now reset scale** - Reset buttons restore both position and scale to defaults
+- Improved hook system with repositioning guards to prevent frame flickering
+- Cleaner divider styling in options panel
+
+### Technical
+- Added hooks for ARENA_PREP_OPPONENT_SPECIALIZATIONS and ARENA_OPPONENT_UPDATE events
+- Quest tracker removed from UIParentRightManagedFrameContainer when repositioned
+- Fixed naming collision in internal reset functions
+
 ## Version 1.3.0
 ### New Features
 - **Party Frame Scaling** - Scale party frames from 50% to 150%

@@ -59,7 +59,7 @@ function FU:CreateOptionsPanel()
     author:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -2)
     author:SetText("|cff888888by |cff2BB673Ketch|r")
 
-    local yOffset = -75
+    local yOffset = -80
 
     -- Helper to create a horizontal divider line
     local function CreateDivider(parent, yPos)
@@ -67,13 +67,9 @@ function FU:CreateOptionsPanel()
         divider:SetHeight(1)
         divider:SetPoint("TOPLEFT", COL1, yPos)
         divider:SetPoint("TOPRIGHT", -16, yPos)
-        divider:SetColorTexture(0.5, 0.5, 0.5, 0.5)
+        divider:SetColorTexture(0.4, 0.4, 0.4, 0.6)
         return divider
     end
-
-    -- Divider after title
-    CreateDivider(panel, yOffset)
-    yOffset = yOffset - 10
 
     -- Helper to enable/disable a slider with visual feedback
     local function SetSliderEnabled(sldr, label, enabled)
@@ -149,18 +145,18 @@ function FU:CreateOptionsPanel()
     end
 
     ---------------------------------------------------------------------
-    -- Misc UI Section (Chat on own row, then Status bars + Loot frames)
+    -- Chat Frames Section
     ---------------------------------------------------------------------
 
-    local miscHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    miscHeader:SetPoint("TOPLEFT", COL1, yOffset)
-    miscHeader:SetText("Misc UI")
-    miscHeader:SetTextColor(1, 0.82, 0)
+    local chatHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    chatHeader:SetPoint("TOPLEFT", COL1, yOffset)
+    chatHeader:SetText("Chat Frames")
+    chatHeader:SetTextColor(1, 0.82, 0)
     yOffset = yOffset - 18
     CreateDivider(panel, yOffset)
     yOffset = yOffset - 12
 
-    -- Chat unlock (own row)
+    -- Chat unlock
     local chatCheck = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
     chatCheck:SetPoint("TOPLEFT", COL1, yOffset)
     chatCheck.Text:SetText("Unlock chat frame")
@@ -179,76 +175,6 @@ function FU:CreateOptionsPanel()
     chatDesc:SetText("|cff888888Drag by tab, resize from corner|r")
 
     yOffset = yOffset - 50
-
-    -- Status bars (column 1)
-    local statusCheck, statusSlider, statusSliderLabel = CreateScaleControl(
-        panel, COL1, yOffset,
-        "Status bars", "scaleStatusBars", "statusBarScale",
-        FU.ApplyStatusBarScale
-    )
-
-    -- Loot roll frames (column 2)
-    local lootCheck, lootSlider, lootSliderLabel = CreateScaleControl(
-        panel, COL2, yOffset,
-        "Loot rolls", "scaleLootFrames", "lootFrameScale",
-        FU.ApplyLootFrameScale
-    )
-
-    yOffset = yOffset - 90
-
-    -- Move/Reset Loot Frames buttons (under column 2)
-    local lootAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    lootAnchorButton:SetPoint("TOPLEFT", COL2, yOffset)
-    lootAnchorButton:SetSize(60, 22)
-    lootAnchorButton:SetText("Move")
-    lootAnchorButton:SetScript("OnClick", function(self)
-        local showing = FU:ToggleLootAnchor()
-        if showing then
-            self:SetText("Lock")
-        else
-            self:SetText("Move")
-        end
-    end)
-
-    local lootResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    lootResetButton:SetPoint("LEFT", lootAnchorButton, "RIGHT", 4, 0)
-    lootResetButton:SetSize(60, 22)
-    lootResetButton:SetText("Reset")
-    lootResetButton:SetScript("OnClick", function()
-        FU:ResetLootFramePosition()
-    end)
-
-    -- Helper to enable/disable loot position buttons
-    local function SetLootButtonsEnabled(enabled)
-        if enabled then
-            lootAnchorButton:Enable()
-            lootAnchorButton:SetAlpha(1.0)
-            lootResetButton:Enable()
-            lootResetButton:SetAlpha(1.0)
-        else
-            lootAnchorButton:Disable()
-            lootAnchorButton:SetAlpha(0.5)
-            lootResetButton:Disable()
-            lootResetButton:SetAlpha(0.5)
-        end
-    end
-
-    -- Handle position and button state when loot scaling is toggled
-    lootCheck:HookScript("OnClick", function(self)
-        local enabled = self:GetChecked()
-        SetLootButtonsEnabled(enabled)
-        if enabled then
-            FU:ApplyLootFramePosition()
-        else
-            if FU.lootAnchor and FU.lootAnchor:IsShown() then
-                FU.lootAnchor:Hide()
-                lootAnchorButton:SetText("Move")
-            end
-            FU:ResetLootFrameToDefault()
-        end
-    end)
-
-    yOffset = yOffset - 35
 
     ---------------------------------------------------------------------
     -- Group & PvP Frames Section (Raid, Party, Arena - 3 columns)
@@ -337,15 +263,181 @@ function FU:CreateOptionsPanel()
         end
     end)
 
-    yOffset = yOffset - 40
+    yOffset = yOffset - 35
 
     ---------------------------------------------------------------------
-    -- Reset Button
+    -- Misc Frames Section (Status bars, Loot rolls, Quest tracker)
     ---------------------------------------------------------------------
 
+    local miscHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    miscHeader:SetPoint("TOPLEFT", COL1, yOffset)
+    miscHeader:SetText("Misc Frames")
+    miscHeader:SetTextColor(1, 0.82, 0)
+    yOffset = yOffset - 18
+    CreateDivider(panel, yOffset)
+    yOffset = yOffset - 12
+
+    -- Status bars (column 1)
+    local statusCheck, statusSlider, statusSliderLabel = CreateScaleControl(
+        panel, COL1, yOffset,
+        "Status bars", "scaleStatusBars", "statusBarScale",
+        FU.ApplyStatusBarScale
+    )
+
+    -- Loot roll frames (column 2)
+    local lootCheck, lootSlider, lootSliderLabel = CreateScaleControl(
+        panel, COL2, yOffset,
+        "Loot rolls", "scaleLootFrames", "lootFrameScale",
+        FU.ApplyLootFrameScale
+    )
+
+    -- Quest tracker (column 3)
+    local questTrackerCheck, questTrackerSlider, questTrackerSliderLabel = CreateScaleControl(
+        panel, COL3, yOffset,
+        "Quest tracker", "scaleQuestTracker", "questTrackerScale",
+        FU.ApplyQuestTrackerScale
+    )
+
+    yOffset = yOffset - 90
+
+    -- Move/Reset Loot Frames buttons (under column 2)
+    local lootAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    lootAnchorButton:SetPoint("TOPLEFT", COL2, yOffset)
+    lootAnchorButton:SetSize(60, 22)
+    lootAnchorButton:SetText("Move")
+    lootAnchorButton:SetScript("OnClick", function(self)
+        local showing = FU:ToggleLootAnchor()
+        if showing then
+            self:SetText("Lock")
+        else
+            self:SetText("Move")
+        end
+    end)
+
+    local lootResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    lootResetButton:SetPoint("LEFT", lootAnchorButton, "RIGHT", 4, 0)
+    lootResetButton:SetSize(60, 22)
+    lootResetButton:SetText("Reset")
+    lootResetButton:SetScript("OnClick", function()
+        FU:ResetLootFramePosition()
+    end)
+
+    -- Helper to enable/disable loot position buttons
+    local function SetLootButtonsEnabled(enabled)
+        if enabled then
+            lootAnchorButton:Enable()
+            lootAnchorButton:SetAlpha(1.0)
+            lootResetButton:Enable()
+            lootResetButton:SetAlpha(1.0)
+        else
+            lootAnchorButton:Disable()
+            lootAnchorButton:SetAlpha(0.5)
+            lootResetButton:Disable()
+            lootResetButton:SetAlpha(0.5)
+        end
+    end
+
+    -- Handle position and button state when loot scaling is toggled
+    lootCheck:HookScript("OnClick", function(self)
+        local enabled = self:GetChecked()
+        SetLootButtonsEnabled(enabled)
+        if enabled then
+            FU:ApplyLootFramePosition()
+        else
+            if FU.lootAnchor and FU.lootAnchor:IsShown() then
+                FU.lootAnchor:Hide()
+                lootAnchorButton:SetText("Move")
+            end
+            FU:ResetLootFrameToDefault()
+        end
+    end)
+
+    -- Move/Reset Quest Tracker buttons (under column 3)
+    local questTrackerAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    questTrackerAnchorButton:SetPoint("TOPLEFT", COL3, yOffset)
+    questTrackerAnchorButton:SetSize(60, 22)
+    questTrackerAnchorButton:SetText("Move")
+    questTrackerAnchorButton:SetScript("OnClick", function(self)
+        local showing = FU:ToggleQuestTrackerAnchor()
+        if showing then
+            self:SetText("Lock")
+        else
+            self:SetText("Move")
+        end
+    end)
+
+    local questTrackerResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    questTrackerResetButton:SetPoint("LEFT", questTrackerAnchorButton, "RIGHT", 4, 0)
+    questTrackerResetButton:SetSize(60, 22)
+    questTrackerResetButton:SetText("Reset")
+    questTrackerResetButton:SetScript("OnClick", function()
+        FU:ResetQuestTrackerPosition()
+    end)
+
+    -- Helper to enable/disable quest tracker position buttons
+    local function SetQuestTrackerButtonsEnabled(enabled)
+        if enabled then
+            questTrackerAnchorButton:Enable()
+            questTrackerAnchorButton:SetAlpha(1.0)
+            questTrackerResetButton:Enable()
+            questTrackerResetButton:SetAlpha(1.0)
+        else
+            questTrackerAnchorButton:Disable()
+            questTrackerAnchorButton:SetAlpha(0.5)
+            questTrackerResetButton:Disable()
+            questTrackerResetButton:SetAlpha(0.5)
+        end
+    end
+
+    -- Handle position and button state when quest tracker scaling is toggled
+    questTrackerCheck:HookScript("OnClick", function(self)
+        local enabled = self:GetChecked()
+        SetQuestTrackerButtonsEnabled(enabled)
+        if enabled then
+            FU:ApplyQuestTrackerPosition()
+        else
+            if FU.questTrackerAnchor and FU.questTrackerAnchor:IsShown() then
+                FU.questTrackerAnchor:Hide()
+                questTrackerAnchorButton:SetText("Move")
+            end
+            FU:ResetQuestTrackerToDefault()
+        end
+    end)
+
+    yOffset = yOffset - 45
+
+    ---------------------------------------------------------------------
+    -- Slash Commands (left) and Reset Button (right) on same row
+    ---------------------------------------------------------------------
+
+    CreateDivider(panel, yOffset)
+    yOffset = yOffset - 15
+
+    -- Slash Commands (left side)
+    local cmdHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    cmdHeader:SetPoint("TOPLEFT", COL1, yOffset)
+    cmdHeader:SetText("Slash Commands")
+    cmdHeader:SetTextColor(1, 0.82, 0)
+
+    local commands = {
+        "/fu - Open settings",
+        "/fu loot - Move loot frames",
+        "/fu quest - Move quest tracker",
+        "/fu arena - Move arena frames",
+    }
+
+    local cmdYOffset = yOffset - 18
+    for _, cmdText in ipairs(commands) do
+        local cmdLine = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        cmdLine:SetPoint("TOPLEFT", COL1, cmdYOffset)
+        cmdLine:SetText("|cff888888" .. cmdText .. "|r")
+        cmdYOffset = cmdYOffset - 14
+    end
+
+    -- Reset Button (right side)
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    resetButton:SetPoint("TOPLEFT", COL1, yOffset)
-    resetButton:SetSize(140, 22)
+    resetButton:SetPoint("TOPLEFT", COL3, yOffset - 2)
+    resetButton:SetSize(130, 22)
     resetButton:SetText("Reset to Defaults")
     resetButton:SetScript("OnClick", function()
         FU:ResetToDefaults()
@@ -353,34 +445,6 @@ function FU:CreateOptionsPanel()
         FU:ApplyAllSettings()
         FU:Print("Settings reset to defaults.")
     end)
-
-    yOffset = yOffset - 40
-
-    ---------------------------------------------------------------------
-    -- Slash Commands Reference
-    ---------------------------------------------------------------------
-
-    local cmdHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    cmdHeader:SetPoint("TOPLEFT", COL1, yOffset)
-    cmdHeader:SetText("Slash Commands")
-    cmdHeader:SetTextColor(1, 0.82, 0)
-    yOffset = yOffset - 18
-    CreateDivider(panel, yOffset)
-    yOffset = yOffset - 10
-
-    local commands = {
-        "/fu - Open settings",
-        "/fu loot - Move loot frames",
-        "/fu arena - Move arena frames",
-        "/fu reset - Reset to defaults",
-    }
-
-    for _, cmdText in ipairs(commands) do
-        local cmdLine = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        cmdLine:SetPoint("TOPLEFT", COL1 + 4, yOffset)
-        cmdLine:SetText("|cff888888" .. cmdText .. "|r")
-        yOffset = yOffset - 14
-    end
 
     -- Store references for refresh
     panel.chatCheck = chatCheck
@@ -397,6 +461,11 @@ function FU:CreateOptionsPanel()
     panel.lootSlider = lootSlider
     panel.lootSliderLabel = lootSliderLabel
     panel.lootAnchorButton = lootAnchorButton
+    panel.questTrackerCheck = questTrackerCheck
+    panel.questTrackerSlider = questTrackerSlider
+    panel.questTrackerSliderLabel = questTrackerSliderLabel
+    panel.questTrackerAnchorButton = questTrackerAnchorButton
+    panel.SetQuestTrackerButtonsEnabled = SetQuestTrackerButtonsEnabled
     panel.arenaCheck = arenaCheck
     panel.arenaSlider = arenaSlider
     panel.arenaSliderLabel = arenaSliderLabel
@@ -442,6 +511,21 @@ function FU:CreateOptionsPanel()
             lootAnchorButton:SetText("Lock")
         else
             lootAnchorButton:SetText("Move")
+        end
+        
+        local questTrackerEnabled = FU:Get("scaleQuestTracker")
+        questTrackerCheck:SetChecked(questTrackerEnabled)
+        local questTrackerScale = FU:Get("questTrackerScale") or 1.0
+        questTrackerSlider:SetValue(questTrackerScale)
+        questTrackerSliderLabel:SetText("Scale: " .. math.floor(questTrackerScale * 100) .. "%")
+        SetSliderEnabled(questTrackerSlider, questTrackerSliderLabel, questTrackerEnabled)
+        SetQuestTrackerButtonsEnabled(questTrackerEnabled)
+        
+        -- Update quest tracker anchor button text based on current state
+        if FU.questTrackerAnchor and FU.questTrackerAnchor:IsShown() then
+            questTrackerAnchorButton:SetText("Lock")
+        else
+            questTrackerAnchorButton:SetText("Move")
         end
         
         local arenaEnabled = FU:Get("scaleArenaFrames")
