@@ -424,6 +424,7 @@ function FU:CreateOptionsPanel()
         "/fu loot - Move loot frames",
         "/fu quest - Move quest tracker",
         "/fu arena - Move arena frames",
+        "/fu reset - Reset to defaults",
     }
 
     local cmdYOffset = yOffset - 18
