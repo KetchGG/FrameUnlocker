@@ -26,10 +26,13 @@ Unlock and customize your UI frames. Drag chat by its tab, resize it from the co
 - **Quest Tracker** - Scale and reposition the objective tracker
   - Draggable anchor for custom positioning
   - Properly removed from Blizzard's layout system to prevent flickering
+- **Raid Warnings** - Scale and reposition raid warnings and Hardcore death alerts
+  - Draggable anchor for custom positioning
+  - Move and Reset buttons in settings
 
 ### Settings Panel
 - Full options UI integrated into the AddOns menu
-- Three-column layout for compact organization
+- Four-column layout for compact organization
 - All preferences persist between sessions
 - Reset buttons restore both position and scale
 - Slash commands reference
@@ -42,9 +45,11 @@ Unlock and customize your UI frames. Drag chat by its tab, resize it from the co
 | `/fu loot` | Toggle loot frame positioning anchor |
 | `/fu quest` | Toggle quest tracker positioning anchor |
 | `/fu arena` | Toggle arena frames positioning anchor |
+| `/fu warn` | Toggle raid warning positioning anchor |
 | `/fu reset` | Reset all settings to defaults |
 
 ## Supported Versions
 
 - Retail (The War Within / Midnight)
 - TBC Anniversary
+- Classic Era (Hardcore / Season of Discovery)

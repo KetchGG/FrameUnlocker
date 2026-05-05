@@ -21,11 +21,12 @@ function FU:CreateOptionsPanel()
     -- Flag to prevent OnValueChanged firing during refresh (used by slider)
     local isRefreshing = false
 
-    -- Layout constants (3-column layout)
+    -- Layout constants (4-column layout)
     local COL1 = 16
-    local COL2 = 170
-    local COL3 = 324
-    local SLIDER_WIDTH = 130
+    local COL2 = 155
+    local COL3 = 294
+    local COL4 = 433
+    local SLIDER_WIDTH = 120
     local SLIDER_HEIGHT = 15
 
     -- Get version from TOC
@@ -58,6 +59,11 @@ function FU:CreateOptionsPanel()
     local author = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     author:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -2)
     author:SetText("|cff888888by |cff2BB673Ketch|r")
+
+    -- Classic Era compatibility note (top right)
+    local compatNote = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    compatNote:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, -16)
+    compatNote:SetText("|cffFFD100* Not available in Classic Era|r")
 
     local yOffset = -80
 
@@ -117,8 +123,8 @@ function FU:CreateOptionsPanel()
             })
         end
 
-        slider.Low:SetText("50%")
-        slider.High:SetText("150%")
+        slider.Low:SetText("")
+        slider.High:SetText("")
         slider.Text:SetText("")
 
         slider:SetScript("OnValueChanged", function(self, value)
@@ -205,7 +211,7 @@ function FU:CreateOptionsPanel()
     -- Arena/Flag carrier frames (column 3)
     local arenaCheck, arenaSlider, arenaSliderLabel = CreateScaleControl(
         panel, COL3, yOffset,
-        "Arena / Flag Carriers", "scaleArenaFrames", "arenaFrameScale",
+        "Arena / Flags*", "scaleArenaFrames", "arenaFrameScale",
         FU.ApplyArenaFrameScale
     )
 
@@ -214,7 +220,7 @@ function FU:CreateOptionsPanel()
     -- Move/Reset Arena Frames buttons (under column 3)
     local arenaAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     arenaAnchorButton:SetPoint("TOPLEFT", COL3, yOffset)
-    arenaAnchorButton:SetSize(60, 22)
+    arenaAnchorButton:SetSize(55, 22)
     arenaAnchorButton:SetText("Move")
     arenaAnchorButton:SetScript("OnClick", function(self)
         local showing = FU:ToggleArenaAnchor()
@@ -227,7 +233,7 @@ function FU:CreateOptionsPanel()
 
     local arenaResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     arenaResetButton:SetPoint("LEFT", arenaAnchorButton, "RIGHT", 4, 0)
-    arenaResetButton:SetSize(60, 22)
+    arenaResetButton:SetSize(55, 22)
     arenaResetButton:SetText("Reset")
     arenaResetButton:SetScript("OnClick", function()
         FU:ResetArenaFramePosition()
@@ -266,7 +272,7 @@ function FU:CreateOptionsPanel()
     yOffset = yOffset - 35
 
     ---------------------------------------------------------------------
-    -- Misc Frames Section (Status bars, Loot rolls, Quest tracker)
+    -- Misc Frames Section (Status bars, Loot rolls, Quest tracker, Raid warnings)
     ---------------------------------------------------------------------
 
     local miscHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -280,7 +286,7 @@ function FU:CreateOptionsPanel()
     -- Status bars (column 1)
     local statusCheck, statusSlider, statusSliderLabel = CreateScaleControl(
         panel, COL1, yOffset,
-        "Status bars", "scaleStatusBars", "statusBarScale",
+        "Status bars*", "scaleStatusBars", "statusBarScale",
         FU.ApplyStatusBarScale
     )
 
@@ -298,12 +304,19 @@ function FU:CreateOptionsPanel()
         FU.ApplyQuestTrackerScale
     )
 
+    -- Raid warnings (column 4)
+    local raidWarningCheck, raidWarningSlider, raidWarningSliderLabel = CreateScaleControl(
+        panel, COL4, yOffset,
+        "Raid warnings", "scaleRaidWarnings", "raidWarningScale",
+        FU.ApplyRaidWarningScale
+    )
+
     yOffset = yOffset - 90
 
     -- Move/Reset Loot Frames buttons (under column 2)
     local lootAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     lootAnchorButton:SetPoint("TOPLEFT", COL2, yOffset)
-    lootAnchorButton:SetSize(60, 22)
+    lootAnchorButton:SetSize(55, 22)
     lootAnchorButton:SetText("Move")
     lootAnchorButton:SetScript("OnClick", function(self)
         local showing = FU:ToggleLootAnchor()
@@ -316,7 +329,7 @@ function FU:CreateOptionsPanel()
 
     local lootResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     lootResetButton:SetPoint("LEFT", lootAnchorButton, "RIGHT", 4, 0)
-    lootResetButton:SetSize(60, 22)
+    lootResetButton:SetSize(55, 22)
     lootResetButton:SetText("Reset")
     lootResetButton:SetScript("OnClick", function()
         FU:ResetLootFramePosition()
@@ -355,7 +368,7 @@ function FU:CreateOptionsPanel()
     -- Move/Reset Quest Tracker buttons (under column 3)
     local questTrackerAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     questTrackerAnchorButton:SetPoint("TOPLEFT", COL3, yOffset)
-    questTrackerAnchorButton:SetSize(60, 22)
+    questTrackerAnchorButton:SetSize(55, 22)
     questTrackerAnchorButton:SetText("Move")
     questTrackerAnchorButton:SetScript("OnClick", function(self)
         local showing = FU:ToggleQuestTrackerAnchor()
@@ -368,7 +381,7 @@ function FU:CreateOptionsPanel()
 
     local questTrackerResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     questTrackerResetButton:SetPoint("LEFT", questTrackerAnchorButton, "RIGHT", 4, 0)
-    questTrackerResetButton:SetSize(60, 22)
+    questTrackerResetButton:SetSize(55, 22)
     questTrackerResetButton:SetText("Reset")
     questTrackerResetButton:SetScript("OnClick", function()
         FU:ResetQuestTrackerPosition()
@@ -404,7 +417,59 @@ function FU:CreateOptionsPanel()
         end
     end)
 
-    yOffset = yOffset - 45
+    -- Move/Reset Raid Warning buttons (under column 4)
+    local raidWarningAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    raidWarningAnchorButton:SetPoint("TOPLEFT", COL4, yOffset)
+    raidWarningAnchorButton:SetSize(55, 22)
+    raidWarningAnchorButton:SetText("Move")
+    raidWarningAnchorButton:SetScript("OnClick", function(self)
+        local showing = FU:ToggleRaidWarningAnchor()
+        if showing then
+            self:SetText("Lock")
+        else
+            self:SetText("Move")
+        end
+    end)
+
+    local raidWarningResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    raidWarningResetButton:SetPoint("LEFT", raidWarningAnchorButton, "RIGHT", 4, 0)
+    raidWarningResetButton:SetSize(55, 22)
+    raidWarningResetButton:SetText("Reset")
+    raidWarningResetButton:SetScript("OnClick", function()
+        FU:ResetRaidWarningPosition()
+    end)
+
+    -- Helper to enable/disable raid warning position buttons
+    local function SetRaidWarningButtonsEnabled(enabled)
+        if enabled then
+            raidWarningAnchorButton:Enable()
+            raidWarningAnchorButton:SetAlpha(1.0)
+            raidWarningResetButton:Enable()
+            raidWarningResetButton:SetAlpha(1.0)
+        else
+            raidWarningAnchorButton:Disable()
+            raidWarningAnchorButton:SetAlpha(0.5)
+            raidWarningResetButton:Disable()
+            raidWarningResetButton:SetAlpha(0.5)
+        end
+    end
+
+    -- Handle position and button state when raid warning is toggled
+    raidWarningCheck:HookScript("OnClick", function(self)
+        local enabled = self:GetChecked()
+        SetRaidWarningButtonsEnabled(enabled)
+        if enabled then
+            FU:ApplyRaidWarningPosition()
+        else
+            if FU.raidWarningAnchor and FU.raidWarningAnchor:IsShown() then
+                FU.raidWarningAnchor:Hide()
+                raidWarningAnchorButton:SetText("Move")
+            end
+            FU:ResetRaidWarningToDefault()
+        end
+    end)
+
+    yOffset = yOffset - 35
 
     ---------------------------------------------------------------------
     -- Slash Commands (left) and Reset Button (right) on same row
@@ -424,6 +489,7 @@ function FU:CreateOptionsPanel()
         "/fu loot - Move loot frames",
         "/fu quest - Move quest tracker",
         "/fu arena - Move arena frames",
+        "/fu warn - Move raid warnings",
         "/fu reset - Reset to defaults",
     }
 
@@ -437,7 +503,7 @@ function FU:CreateOptionsPanel()
 
     -- Reset Button (right side)
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    resetButton:SetPoint("TOPLEFT", COL3, yOffset - 2)
+    resetButton:SetPoint("TOPLEFT", COL4, yOffset - 2)
     resetButton:SetSize(130, 22)
     resetButton:SetText("Reset to Defaults")
     resetButton:SetScript("OnClick", function()
@@ -472,6 +538,11 @@ function FU:CreateOptionsPanel()
     panel.arenaSliderLabel = arenaSliderLabel
     panel.arenaAnchorButton = arenaAnchorButton
     panel.SetArenaButtonsEnabled = SetArenaButtonsEnabled
+    panel.raidWarningCheck = raidWarningCheck
+    panel.raidWarningSlider = raidWarningSlider
+    panel.raidWarningSliderLabel = raidWarningSliderLabel
+    panel.raidWarningAnchorButton = raidWarningAnchorButton
+    panel.SetRaidWarningButtonsEnabled = SetRaidWarningButtonsEnabled
 
     ---------------------------------------------------------------------
     -- Refresh function to sync UI with saved settings
@@ -543,7 +614,21 @@ function FU:CreateOptionsPanel()
         else
             arenaAnchorButton:SetText("Move")
         end
-        
+
+        local raidWarningEnabled = FU:Get("scaleRaidWarnings")
+        raidWarningCheck:SetChecked(raidWarningEnabled)
+        local rwScale = FU:Get("raidWarningScale") or 1.0
+        raidWarningSlider:SetValue(rwScale)
+        raidWarningSliderLabel:SetText("Scale: " .. math.floor(rwScale * 100) .. "%")
+        SetSliderEnabled(raidWarningSlider, raidWarningSliderLabel, raidWarningEnabled)
+        SetRaidWarningButtonsEnabled(raidWarningEnabled)
+
+        if FU.raidWarningAnchor and FU.raidWarningAnchor:IsShown() then
+            raidWarningAnchorButton:SetText("Lock")
+        else
+            raidWarningAnchorButton:SetText("Move")
+        end
+
         isRefreshing = false
     end
 

@@ -26,6 +26,10 @@ FU.defaults = {
     questTrackerScale = 1.0,
     questTrackerX = false,  -- false = use default position
     questTrackerY = false,
+    scaleRaidWarnings = false,
+    raidWarningScale = 1.0,
+    raidWarningX = false,  -- false = use default position
+    raidWarningY = false,
 }
 
 -- Initialize saved variables

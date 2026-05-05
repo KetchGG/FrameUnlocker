@@ -45,6 +45,10 @@ local function ReapplyScaling()
         FU:ApplyQuestTrackerScale()
     end
     FU:ApplyQuestTrackerPosition()
+    if FU:Get("scaleRaidWarnings") then
+        FU:ApplyRaidWarningScale()
+    end
+    FU:ApplyRaidWarningPosition()
 end
 
 ---------------------------------------------------------------------
@@ -96,6 +100,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         FU:HookLootFramePosition()
         FU:HookArenaFramePosition()
         FU:HookQuestTrackerPosition()
+        FU:HookRaidWarningPosition()
 
         -- Register events that may require reapplying settings
         self:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -104,10 +109,10 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
         self:RegisterEvent("ARENA_OPPONENT_UPDATE")
 
-        -- Hook Edit Mode (frames exist now after login)
-        if EditModeManagerFrame then
+        -- Hook Edit Mode (frames exist now after login, not available in Classic Era)
+        if EditModeManagerFrame and EditModeManagerFrame.HookScript then
             EditModeManagerFrame:HookScript("OnHide", OnEditModeExit)
-        elseif EditModeManager then
+        elseif EditModeManager and EditModeManager.HookScript then
             EditModeManager:HookScript("OnHide", OnEditModeExit)
         end
 
@@ -193,6 +198,15 @@ SlashCmdList.FRAMEUNLOCKER = function(msg)
             end
         end
         FU:ToggleQuestTrackerAnchor()
+    elseif msg == "warn" or msg == "warning" then
+        -- Enable raid warning customization if not already enabled
+        if not FU:Get("scaleRaidWarnings") then
+            FU:Set("scaleRaidWarnings", true)
+            if FU.optionsPanel and FU.optionsPanel.refresh then
+                FU.optionsPanel.refresh()
+            end
+        end
+        FU:ToggleRaidWarningAnchor()
     elseif msg == "reset" then
         FU:ResetToDefaults()
         if FU.optionsPanel and FU.optionsPanel.refresh then

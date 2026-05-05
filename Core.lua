@@ -873,6 +873,212 @@ function FU:HookQuestTrackerPosition()
 end
 
 ---------------------------------------------------------------------
+-- Raid Warning Frame Anchor and Positioning (Hardcore Death Alerts)
+---------------------------------------------------------------------
+
+local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
+
+-- Create the draggable anchor frame for raid warnings
+function FU:CreateRaidWarningAnchor()
+    if self.raidWarningAnchor then
+        return self.raidWarningAnchor
+    end
+
+    local anchor = CreateFrame("Frame", "FURaidWarningAnchor", UIParent, backdropTemplate)
+    anchor:SetSize(260, 50)
+    anchor:SetPoint("TOP", UIParent, "TOP", 0, -200)
+    anchor:SetMovable(true)
+    anchor:EnableMouse(true)
+    anchor:SetClampedToScreen(true)
+    anchor:RegisterForDrag("LeftButton")
+    anchor:Hide()
+
+    -- Visual styling (red/orange for warnings theme)
+    if anchor.SetBackdrop then
+        anchor:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+        anchor:SetBackdropColor(0.6, 0.2, 0.1, 0.9)
+        anchor:SetBackdropBorderColor(0.9, 0.4, 0.1, 1)
+    end
+
+    -- Label
+    local label = anchor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    label:SetPoint("TOP", 0, -8)
+    label:SetText("Raid Warning / Death Alert Anchor")
+
+    -- Scale button (opens options)
+    local scaleBtn = CreateFrame("Button", nil, anchor, "UIPanelButtonTemplate")
+    scaleBtn:SetSize(80, 22)
+    scaleBtn:SetPoint("BOTTOMLEFT", 12, 6)
+    scaleBtn:SetText("Scale")
+    scaleBtn:SetScript("OnClick", function()
+        FU:OpenOptions()
+    end)
+
+    -- Lock button
+    local lockBtn = CreateFrame("Button", nil, anchor, "UIPanelButtonTemplate")
+    lockBtn:SetSize(80, 22)
+    lockBtn:SetPoint("BOTTOMRIGHT", -12, 6)
+    lockBtn:SetText("Lock")
+    lockBtn:SetScript("OnClick", function()
+        FU:HideRaidWarningAnchor()
+        if FU.optionsPanel and FU.optionsPanel.raidWarningAnchorButton then
+            FU.optionsPanel.raidWarningAnchorButton:SetText("Move")
+        end
+    end)
+
+    -- Drag handlers
+    anchor:SetScript("OnDragStart", function(self)
+        self:StartMoving()
+    end)
+
+    anchor:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        -- Save position using TOP-relative coords
+        local x, y = self:GetCenter()
+        local uiX = UIParent:GetCenter()
+        local top = self:GetTop()
+        local screenH = UIParent:GetTop()
+        FU:Set("raidWarningX", x - uiX)
+        FU:Set("raidWarningY", top - screenH)
+        FU:ApplyRaidWarningPosition()
+    end)
+
+    self.raidWarningAnchor = anchor
+    return anchor
+end
+
+function FU:ShowRaidWarningAnchor()
+    local anchor = self:CreateRaidWarningAnchor()
+
+    local x = self:Get("raidWarningX")
+    local y = self:Get("raidWarningY")
+    anchor:ClearAllPoints()
+    if x and x ~= false and y and y ~= false then
+        anchor:SetPoint("TOP", UIParent, "TOP", x, y)
+    else
+        anchor:SetPoint("TOP", UIParent, "TOP", 0, -200)
+    end
+
+    anchor:Show()
+    self:Print("Drag the anchor to reposition raid warnings / death alerts. Click 'Lock' when done.")
+end
+
+function FU:HideRaidWarningAnchor()
+    if self.raidWarningAnchor then
+        local x, y = self.raidWarningAnchor:GetCenter()
+        local top = self.raidWarningAnchor:GetTop()
+        if x and top then
+            local uiX = UIParent:GetCenter()
+            local screenH = UIParent:GetTop()
+            self:Set("raidWarningX", x - uiX)
+            self:Set("raidWarningY", top - screenH)
+            self:ApplyRaidWarningPosition()
+        end
+        self.raidWarningAnchor:Hide()
+        self:Print("Raid warning position saved.")
+    end
+end
+
+function FU:ToggleRaidWarningAnchor()
+    if self.raidWarningAnchor and self.raidWarningAnchor:IsShown() then
+        self:HideRaidWarningAnchor()
+        return false
+    else
+        self:ShowRaidWarningAnchor()
+        return true
+    end
+end
+
+function FU:ApplyRaidWarningScale(scale)
+    scale = scale or self:Get("raidWarningScale") or 1.0
+
+    if RaidWarningFrame then
+        RaidWarningFrame:SetScale(scale)
+    end
+end
+
+function FU:ApplyRaidWarningPosition()
+    if not self:Get("scaleRaidWarnings") then
+        return
+    end
+
+    local x = self:Get("raidWarningX")
+    local y = self:Get("raidWarningY")
+
+    if not x or x == false or not y or y == false then
+        return
+    end
+
+    if RaidWarningFrame then
+        self.raidWarningRepositioning = true
+        RaidWarningFrame:ClearAllPoints()
+        RaidWarningFrame:SetPoint("TOP", UIParent, "TOP", x, y)
+        self.raidWarningRepositioning = false
+    end
+end
+
+function FU:ResetRaidWarningToDefault()
+    if RaidWarningFrame then
+        RaidWarningFrame:ClearAllPoints()
+        RaidWarningFrame:SetPoint("TOP", UIParent, "TOP", 0, -200)
+    end
+end
+
+function FU:ResetRaidWarningPosition()
+    self:Set("raidWarningX", false)
+    self:Set("raidWarningY", false)
+    self:Set("raidWarningScale", 1.0)
+
+    if self.raidWarningAnchor and self.raidWarningAnchor:IsShown() then
+        self.raidWarningAnchor:Hide()
+        if self.optionsPanel and self.optionsPanel.raidWarningAnchorButton then
+            self.optionsPanel.raidWarningAnchorButton:SetText("Move")
+        end
+    end
+
+    self:ApplyRaidWarningScale(1.0)
+    self:ResetRaidWarningToDefault()
+
+    if self.optionsPanel and self.optionsPanel.refresh then
+        self.optionsPanel.refresh()
+    end
+
+    self:Print("Raid warning position reset to default.")
+end
+
+function FU:HookRaidWarningPosition()
+    if RaidWarningFrame and not self.raidWarningHooked then
+        local pendingReposition = false
+        hooksecurefunc(RaidWarningFrame, "SetPoint", function()
+            if FU.raidWarningRepositioning then
+                return
+            end
+            if not FU:Get("scaleRaidWarnings") then
+                return
+            end
+            local x = FU:Get("raidWarningX")
+            local y = FU:Get("raidWarningY")
+            if x and x ~= false and y and y ~= false then
+                if pendingReposition then
+                    return
+                end
+                pendingReposition = true
+                C_Timer.After(0, function()
+                    pendingReposition = false
+                    FU:ApplyRaidWarningPosition()
+                end)
+            end
+        end)
+        self.raidWarningHooked = true
+    end
+end
+
+---------------------------------------------------------------------
 -- Print helper
 ---------------------------------------------------------------------
 
@@ -901,4 +1107,6 @@ function FU:ApplyAllSettings()
     self:ApplyArenaFramePosition()
     self:ApplyQuestTrackerScale(self:Get("scaleQuestTracker") and self:Get("questTrackerScale") or 1.0)
     self:ApplyQuestTrackerPosition()
+    self:ApplyRaidWarningScale(self:Get("scaleRaidWarnings") and self:Get("raidWarningScale") or 1.0)
+    self:ApplyRaidWarningPosition()
 end

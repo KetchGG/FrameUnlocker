@@ -1,5 +1,24 @@
 # Changelog
 
+## Version 1.5.0
+### New Features
+- **Classic Era Support** - Added `FrameUnlocker_Vanilla.toc` for WoW Classic Era (including Hardcore/Season of Discovery)
+- **Raid Warning Positioning** - Scale and reposition raid warnings and Hardcore death alerts
+  - Draggable anchor for custom positioning
+  - Scale slider from 50% to 150%
+  - Move and Reset buttons in settings
+- `/fu warn` - Toggle raid warning positioning anchor
+
+### Improvements
+- **Four-column layout** - Settings panel expanded to fit all options without scrolling
+- **Classic Era compatibility note** - Asterisk marks features not available in Classic Era
+- Defensive checks for Edit Mode hooks on clients that don't support it
+
+### Technical
+- Conditional `BackdropTemplate` usage for Classic Era anchor compatibility
+- Added `HookScript` existence check for `EditModeManagerFrame` on non-retail clients
+- Raid warning position hook with throttled reapply to prevent Blizzard resets
+
 ## Version 1.4.0
 ### New Features
 - **Quest Tracker** - Scale and reposition the quest/objective tracker
