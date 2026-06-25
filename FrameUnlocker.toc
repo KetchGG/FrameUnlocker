@@ -7,6 +7,9 @@
 ## SavedVariables: FrameUnlockerDB
 
 Config.lua
+Chat.lua
+Frames.lua
+Anchors.lua
 Core.lua
 Options.lua
 Init.lua

@@ -660,6 +660,7 @@ function FU:OpenOptions()
     if hasSettingsAPI then
         Settings.OpenToCategory(self.settingsCategory:GetID())
     else
+        -- Two calls required: first selects the category, second scrolls to it (WoW quirk).
         InterfaceOptionsFrame_OpenToCategory(self.optionsPanel)
         InterfaceOptionsFrame_OpenToCategory(self.optionsPanel)
     end
