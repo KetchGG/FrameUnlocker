@@ -29,10 +29,9 @@ function FU:CreateOptionsPanel()
     local SLIDER_WIDTH = 120
     local SLIDER_HEIGHT = 15
 
-    -- Get version from TOC
-    local version = C_AddOns and C_AddOns.GetAddOnMetadata(addonName, "Version") 
-        or GetAddOnMetadata(addonName, "Version") 
-        or "?"
+    -- Get version from TOC (C_AddOns on modern clients, global on older ones)
+    local getMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+    local version = (getMeta and getMeta(addonName, "Version")) or "?"
 
     -- Logo image
     local logoTexture = panel:CreateTexture(nil, "ARTWORK")
@@ -123,9 +122,11 @@ function FU:CreateOptionsPanel()
             })
         end
 
-        slider.Low:SetText("")
-        slider.High:SetText("")
-        slider.Text:SetText("")
+        -- These named regions are keyed members on modern OptionsSliderTemplate;
+        -- guard in case an older client doesn't expose them on an unnamed slider.
+        if slider.Low  then slider.Low:SetText("")  end
+        if slider.High then slider.High:SetText("") end
+        if slider.Text then slider.Text:SetText("") end
 
         slider:SetScript("OnValueChanged", function(self, value)
             if isRefreshing then return end
@@ -148,6 +149,56 @@ function FU:CreateOptionsPanel()
         end)
 
         return check, slider, sliderLabel
+    end
+
+    -- Create the Move/Reset position buttons for a repositionable feature and wire
+    -- its scale checkbox to enable/disable them and apply/clear the position.
+    -- spec: check, anchorField, toggle, resetPosition, applyPosition, resetToDefault
+    --   (the four action fields are FU methods). Returns the Move button and the
+    --   enable function, for the caller to store on `panel` for refresh.
+    local function CreatePositionControls(col, yPos, spec)
+        local moveBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+        moveBtn:SetPoint("TOPLEFT", col, yPos)
+        moveBtn:SetSize(55, 22)
+        moveBtn:SetText("Move")
+        moveBtn:SetScript("OnClick", function(self)
+            local showing = spec.toggle(FU)
+            self:SetText(showing and "Lock" or "Move")
+            -- Close the panel when a frame is unlocked so the on-screen anchor is
+            -- unobstructed; the anchor's Lock button reopens it (see Anchors.lua).
+            if showing then FU:CloseOptions() end
+        end)
+
+        local resetBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+        resetBtn:SetPoint("LEFT", moveBtn, "RIGHT", 4, 0)
+        resetBtn:SetSize(55, 22)
+        resetBtn:SetText("Reset")
+        resetBtn:SetScript("OnClick", function() spec.resetPosition(FU) end)
+
+        local function setEnabled(enabled)
+            local alpha = enabled and 1.0 or 0.5
+            if enabled then moveBtn:Enable();  resetBtn:Enable()
+            else            moveBtn:Disable(); resetBtn:Disable() end
+            moveBtn:SetAlpha(alpha)
+            resetBtn:SetAlpha(alpha)
+        end
+
+        spec.check:HookScript("OnClick", function(self)
+            local enabled = self:GetChecked()
+            setEnabled(enabled)
+            if enabled then
+                spec.applyPosition(FU)
+            else
+                local anchor = FU[spec.anchorField]
+                if anchor and anchor:IsShown() then
+                    anchor:Hide()
+                    moveBtn:SetText("Move")
+                end
+                spec.resetToDefault(FU)
+            end
+        end)
+
+        return moveBtn, setEnabled
     end
 
     ---------------------------------------------------------------------
@@ -183,12 +234,12 @@ function FU:CreateOptionsPanel()
     yOffset = yOffset - 50
 
     ---------------------------------------------------------------------
-    -- Group & PvP Frames Section (Raid, Party, Arena - 3 columns)
+    -- Group and Gameplay Frames Section (Raid, Party, Quest, Loot - 4 columns)
     ---------------------------------------------------------------------
 
     local groupHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     groupHeader:SetPoint("TOPLEFT", COL1, yOffset)
-    groupHeader:SetText("Group & PvP Frames")
+    groupHeader:SetText("Group and Gameplay Frames")
     groupHeader:SetTextColor(1, 0.82, 0)
     yOffset = yOffset - 18
     CreateDivider(panel, yOffset)
@@ -208,95 +259,6 @@ function FU:CreateOptionsPanel()
         FU.ApplyPartyFrameScale
     )
 
-    -- Arena/Flag carrier frames (column 3)
-    local arenaCheck, arenaSlider, arenaSliderLabel = CreateScaleControl(
-        panel, COL3, yOffset,
-        "Arena / Flags*", "scaleArenaFrames", "arenaFrameScale",
-        FU.ApplyArenaFrameScale
-    )
-
-    yOffset = yOffset - 90
-
-    -- Move/Reset Arena Frames buttons (under column 3)
-    local arenaAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    arenaAnchorButton:SetPoint("TOPLEFT", COL3, yOffset)
-    arenaAnchorButton:SetSize(55, 22)
-    arenaAnchorButton:SetText("Move")
-    arenaAnchorButton:SetScript("OnClick", function(self)
-        local showing = FU:ToggleArenaAnchor()
-        if showing then
-            self:SetText("Lock")
-        else
-            self:SetText("Move")
-        end
-    end)
-
-    local arenaResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    arenaResetButton:SetPoint("LEFT", arenaAnchorButton, "RIGHT", 4, 0)
-    arenaResetButton:SetSize(55, 22)
-    arenaResetButton:SetText("Reset")
-    arenaResetButton:SetScript("OnClick", function()
-        FU:ResetArenaFramePosition()
-    end)
-
-    -- Helper to enable/disable arena position buttons
-    local function SetArenaButtonsEnabled(enabled)
-        if enabled then
-            arenaAnchorButton:Enable()
-            arenaAnchorButton:SetAlpha(1.0)
-            arenaResetButton:Enable()
-            arenaResetButton:SetAlpha(1.0)
-        else
-            arenaAnchorButton:Disable()
-            arenaAnchorButton:SetAlpha(0.5)
-            arenaResetButton:Disable()
-            arenaResetButton:SetAlpha(0.5)
-        end
-    end
-
-    -- Handle position and button state when arena scaling is toggled
-    arenaCheck:HookScript("OnClick", function(self)
-        local enabled = self:GetChecked()
-        SetArenaButtonsEnabled(enabled)
-        if enabled then
-            FU:ApplyArenaFramePosition()
-        else
-            if FU.arenaAnchor and FU.arenaAnchor:IsShown() then
-                FU.arenaAnchor:Hide()
-                arenaAnchorButton:SetText("Move")
-            end
-            FU:ResetArenaFrameToDefault()
-        end
-    end)
-
-    yOffset = yOffset - 35
-
-    ---------------------------------------------------------------------
-    -- Misc Frames Section (Status bars, Loot rolls, Quest tracker, Raid warnings)
-    ---------------------------------------------------------------------
-
-    local miscHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    miscHeader:SetPoint("TOPLEFT", COL1, yOffset)
-    miscHeader:SetText("Misc Frames")
-    miscHeader:SetTextColor(1, 0.82, 0)
-    yOffset = yOffset - 18
-    CreateDivider(panel, yOffset)
-    yOffset = yOffset - 12
-
-    -- Status bars (column 1)
-    local statusCheck, statusSlider, statusSliderLabel = CreateScaleControl(
-        panel, COL1, yOffset,
-        "Status bars*", "scaleStatusBars", "statusBarScale",
-        FU.ApplyStatusBarScale
-    )
-
-    -- Loot roll frames (column 2)
-    local lootCheck, lootSlider, lootSliderLabel = CreateScaleControl(
-        panel, COL2, yOffset,
-        "Loot rolls", "scaleLootFrames", "lootFrameScale",
-        FU.ApplyLootFrameScale
-    )
-
     -- Quest tracker (column 3)
     local questTrackerCheck, questTrackerSlider, questTrackerSliderLabel = CreateScaleControl(
         panel, COL3, yOffset,
@@ -304,170 +266,86 @@ function FU:CreateOptionsPanel()
         FU.ApplyQuestTrackerScale
     )
 
-    -- Raid warnings (column 4)
-    local raidWarningCheck, raidWarningSlider, raidWarningSliderLabel = CreateScaleControl(
+    -- Loot roll frames (column 4)
+    local lootCheck, lootSlider, lootSliderLabel = CreateScaleControl(
         panel, COL4, yOffset,
+        "Loot rolls", "scaleLootFrames", "lootFrameScale",
+        FU.ApplyLootFrameScale
+    )
+
+    yOffset = yOffset - 90
+
+    -- Move/Reset Quest Tracker buttons (under column 3)
+    local questTrackerAnchorButton, SetQuestTrackerButtonsEnabled = CreatePositionControls(COL3, yOffset, {
+        check = questTrackerCheck, anchorField = "questTrackerAnchor",
+        toggle = FU.ToggleQuestTrackerAnchor, resetPosition = FU.ResetQuestTrackerPosition,
+        applyPosition = FU.ApplyQuestTrackerPosition, resetToDefault = FU.ResetQuestTrackerToDefault,
+    })
+
+    -- Move/Reset Loot Frames buttons (under column 4)
+    local lootAnchorButton, SetLootButtonsEnabled = CreatePositionControls(COL4, yOffset, {
+        check = lootCheck, anchorField = "lootAnchor",
+        toggle = FU.ToggleLootAnchor, resetPosition = FU.ResetLootFramePosition,
+        applyPosition = FU.ApplyLootFramePosition, resetToDefault = FU.ResetLootFrameToDefault,
+    })
+
+    yOffset = yOffset - 35
+
+    ---------------------------------------------------------------------
+    -- PvP and Misc Section (Arena, PvP objectives, Below minimap, Raid warnings)
+    ---------------------------------------------------------------------
+
+    local miscHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    miscHeader:SetPoint("TOPLEFT", COL1, yOffset)
+    miscHeader:SetText("PvP and Misc")
+    miscHeader:SetTextColor(1, 0.82, 0)
+    yOffset = yOffset - 18
+    CreateDivider(panel, yOffset)
+    yOffset = yOffset - 12
+
+    -- Arena/Flag carrier frames (column 1)
+    local arenaCheck, arenaSlider, arenaSliderLabel = CreateScaleControl(
+        panel, COL1, yOffset,
+        "Arena / Flags*", "scaleArenaFrames", "arenaFrameScale",
+        FU.ApplyArenaFrameScale
+    )
+
+    -- Below-minimap widgets (column 2)
+    local belowMinimapCheck, belowMinimapSlider, belowMinimapSliderLabel = CreateScaleControl(
+        panel, COL2, yOffset,
+        "Below minimap", "scaleBelowMinimap", "belowMinimapScale",
+        FU.ApplyBelowMinimapScale
+    )
+
+    -- Raid warnings (column 3)
+    local raidWarningCheck, raidWarningSlider, raidWarningSliderLabel = CreateScaleControl(
+        panel, COL3, yOffset,
         "Raid warnings", "scaleRaidWarnings", "raidWarningScale",
         FU.ApplyRaidWarningScale
     )
 
     yOffset = yOffset - 90
 
-    -- Move/Reset Loot Frames buttons (under column 2)
-    local lootAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    lootAnchorButton:SetPoint("TOPLEFT", COL2, yOffset)
-    lootAnchorButton:SetSize(55, 22)
-    lootAnchorButton:SetText("Move")
-    lootAnchorButton:SetScript("OnClick", function(self)
-        local showing = FU:ToggleLootAnchor()
-        if showing then
-            self:SetText("Lock")
-        else
-            self:SetText("Move")
-        end
-    end)
+    -- Move/Reset Arena Frames buttons (under column 1)
+    local arenaAnchorButton, SetArenaButtonsEnabled = CreatePositionControls(COL1, yOffset, {
+        check = arenaCheck, anchorField = "arenaAnchor",
+        toggle = FU.ToggleArenaAnchor, resetPosition = FU.ResetArenaFramePosition,
+        applyPosition = FU.ApplyArenaFramePosition, resetToDefault = FU.ResetArenaFrameToDefault,
+    })
 
-    local lootResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    lootResetButton:SetPoint("LEFT", lootAnchorButton, "RIGHT", 4, 0)
-    lootResetButton:SetSize(55, 22)
-    lootResetButton:SetText("Reset")
-    lootResetButton:SetScript("OnClick", function()
-        FU:ResetLootFramePosition()
-    end)
+    -- Move/Reset Below-Minimap buttons (under column 2)
+    local belowMinimapAnchorButton, SetBelowMinimapButtonsEnabled = CreatePositionControls(COL2, yOffset, {
+        check = belowMinimapCheck, anchorField = "belowMinimapAnchor",
+        toggle = FU.ToggleBelowMinimapAnchor, resetPosition = FU.ResetBelowMinimapPosition,
+        applyPosition = FU.ApplyBelowMinimapPosition, resetToDefault = FU.ResetBelowMinimapToDefault,
+    })
 
-    -- Helper to enable/disable loot position buttons
-    local function SetLootButtonsEnabled(enabled)
-        if enabled then
-            lootAnchorButton:Enable()
-            lootAnchorButton:SetAlpha(1.0)
-            lootResetButton:Enable()
-            lootResetButton:SetAlpha(1.0)
-        else
-            lootAnchorButton:Disable()
-            lootAnchorButton:SetAlpha(0.5)
-            lootResetButton:Disable()
-            lootResetButton:SetAlpha(0.5)
-        end
-    end
-
-    -- Handle position and button state when loot scaling is toggled
-    lootCheck:HookScript("OnClick", function(self)
-        local enabled = self:GetChecked()
-        SetLootButtonsEnabled(enabled)
-        if enabled then
-            FU:ApplyLootFramePosition()
-        else
-            if FU.lootAnchor and FU.lootAnchor:IsShown() then
-                FU.lootAnchor:Hide()
-                lootAnchorButton:SetText("Move")
-            end
-            FU:ResetLootFrameToDefault()
-        end
-    end)
-
-    -- Move/Reset Quest Tracker buttons (under column 3)
-    local questTrackerAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    questTrackerAnchorButton:SetPoint("TOPLEFT", COL3, yOffset)
-    questTrackerAnchorButton:SetSize(55, 22)
-    questTrackerAnchorButton:SetText("Move")
-    questTrackerAnchorButton:SetScript("OnClick", function(self)
-        local showing = FU:ToggleQuestTrackerAnchor()
-        if showing then
-            self:SetText("Lock")
-        else
-            self:SetText("Move")
-        end
-    end)
-
-    local questTrackerResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    questTrackerResetButton:SetPoint("LEFT", questTrackerAnchorButton, "RIGHT", 4, 0)
-    questTrackerResetButton:SetSize(55, 22)
-    questTrackerResetButton:SetText("Reset")
-    questTrackerResetButton:SetScript("OnClick", function()
-        FU:ResetQuestTrackerPosition()
-    end)
-
-    -- Helper to enable/disable quest tracker position buttons
-    local function SetQuestTrackerButtonsEnabled(enabled)
-        if enabled then
-            questTrackerAnchorButton:Enable()
-            questTrackerAnchorButton:SetAlpha(1.0)
-            questTrackerResetButton:Enable()
-            questTrackerResetButton:SetAlpha(1.0)
-        else
-            questTrackerAnchorButton:Disable()
-            questTrackerAnchorButton:SetAlpha(0.5)
-            questTrackerResetButton:Disable()
-            questTrackerResetButton:SetAlpha(0.5)
-        end
-    end
-
-    -- Handle position and button state when quest tracker scaling is toggled
-    questTrackerCheck:HookScript("OnClick", function(self)
-        local enabled = self:GetChecked()
-        SetQuestTrackerButtonsEnabled(enabled)
-        if enabled then
-            FU:ApplyQuestTrackerPosition()
-        else
-            if FU.questTrackerAnchor and FU.questTrackerAnchor:IsShown() then
-                FU.questTrackerAnchor:Hide()
-                questTrackerAnchorButton:SetText("Move")
-            end
-            FU:ResetQuestTrackerToDefault()
-        end
-    end)
-
-    -- Move/Reset Raid Warning buttons (under column 4)
-    local raidWarningAnchorButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    raidWarningAnchorButton:SetPoint("TOPLEFT", COL4, yOffset)
-    raidWarningAnchorButton:SetSize(55, 22)
-    raidWarningAnchorButton:SetText("Move")
-    raidWarningAnchorButton:SetScript("OnClick", function(self)
-        local showing = FU:ToggleRaidWarningAnchor()
-        if showing then
-            self:SetText("Lock")
-        else
-            self:SetText("Move")
-        end
-    end)
-
-    local raidWarningResetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    raidWarningResetButton:SetPoint("LEFT", raidWarningAnchorButton, "RIGHT", 4, 0)
-    raidWarningResetButton:SetSize(55, 22)
-    raidWarningResetButton:SetText("Reset")
-    raidWarningResetButton:SetScript("OnClick", function()
-        FU:ResetRaidWarningPosition()
-    end)
-
-    -- Helper to enable/disable raid warning position buttons
-    local function SetRaidWarningButtonsEnabled(enabled)
-        if enabled then
-            raidWarningAnchorButton:Enable()
-            raidWarningAnchorButton:SetAlpha(1.0)
-            raidWarningResetButton:Enable()
-            raidWarningResetButton:SetAlpha(1.0)
-        else
-            raidWarningAnchorButton:Disable()
-            raidWarningAnchorButton:SetAlpha(0.5)
-            raidWarningResetButton:Disable()
-            raidWarningResetButton:SetAlpha(0.5)
-        end
-    end
-
-    -- Handle position and button state when raid warning is toggled
-    raidWarningCheck:HookScript("OnClick", function(self)
-        local enabled = self:GetChecked()
-        SetRaidWarningButtonsEnabled(enabled)
-        if enabled then
-            FU:ApplyRaidWarningPosition()
-        else
-            if FU.raidWarningAnchor and FU.raidWarningAnchor:IsShown() then
-                FU.raidWarningAnchor:Hide()
-                raidWarningAnchorButton:SetText("Move")
-            end
-            FU:ResetRaidWarningToDefault()
-        end
-    end)
+    -- Move/Reset Raid Warning buttons (under column 3)
+    local raidWarningAnchorButton, SetRaidWarningButtonsEnabled = CreatePositionControls(COL3, yOffset, {
+        check = raidWarningCheck, anchorField = "raidWarningAnchor",
+        toggle = FU.ToggleRaidWarningAnchor, resetPosition = FU.ResetRaidWarningPosition,
+        applyPosition = FU.ApplyRaidWarningPosition, resetToDefault = FU.ResetRaidWarningToDefault,
+    })
 
     yOffset = yOffset - 35
 
@@ -486,11 +364,7 @@ function FU:CreateOptionsPanel()
 
     local commands = {
         "/fu - Open settings",
-        "/fu loot - Move loot frames",
-        "/fu quest - Move quest tracker",
-        "/fu arena - Move arena frames",
-        "/fu warn - Move raid warnings",
-        "/fu reset - Reset to defaults",
+        "/fu reset - Reset all to defaults",
     }
 
     local cmdYOffset = yOffset - 18
@@ -521,9 +395,6 @@ function FU:CreateOptionsPanel()
     panel.partyCheck = partyCheck
     panel.partySlider = partySlider
     panel.partySliderLabel = partySliderLabel
-    panel.statusCheck = statusCheck
-    panel.statusSlider = statusSlider
-    panel.statusSliderLabel = statusSliderLabel
     panel.lootCheck = lootCheck
     panel.lootSlider = lootSlider
     panel.lootSliderLabel = lootSliderLabel
@@ -532,103 +403,57 @@ function FU:CreateOptionsPanel()
     panel.questTrackerSlider = questTrackerSlider
     panel.questTrackerSliderLabel = questTrackerSliderLabel
     panel.questTrackerAnchorButton = questTrackerAnchorButton
-    panel.SetQuestTrackerButtonsEnabled = SetQuestTrackerButtonsEnabled
     panel.arenaCheck = arenaCheck
     panel.arenaSlider = arenaSlider
     panel.arenaSliderLabel = arenaSliderLabel
     panel.arenaAnchorButton = arenaAnchorButton
-    panel.SetArenaButtonsEnabled = SetArenaButtonsEnabled
     panel.raidWarningCheck = raidWarningCheck
     panel.raidWarningSlider = raidWarningSlider
     panel.raidWarningSliderLabel = raidWarningSliderLabel
     panel.raidWarningAnchorButton = raidWarningAnchorButton
-    panel.SetRaidWarningButtonsEnabled = SetRaidWarningButtonsEnabled
+    panel.belowMinimapCheck = belowMinimapCheck
+    panel.belowMinimapSlider = belowMinimapSlider
+    panel.belowMinimapSliderLabel = belowMinimapSliderLabel
+    panel.belowMinimapAnchorButton = belowMinimapAnchorButton
 
     ---------------------------------------------------------------------
     -- Refresh function to sync UI with saved settings
     ---------------------------------------------------------------------
 
+    -- Scale controls in display order. The optional position fields (setButtons /
+    -- anchorButton / anchorField) drive the Move/Reset button state and Move/Lock
+    -- label for the features that also support repositioning.
+    local scaleControls = {
+        { check = raidCheck,         slider = slider,             label = sliderLabel,             enable = "scaleRaidFrames",   scale = "raidFrameScale" },
+        { check = partyCheck,        slider = partySlider,        label = partySliderLabel,        enable = "scalePartyFrames",  scale = "partyFrameScale" },
+        { check = lootCheck,         slider = lootSlider,         label = lootSliderLabel,         enable = "scaleLootFrames",   scale = "lootFrameScale",
+          setButtons = SetLootButtonsEnabled,         anchorButton = lootAnchorButton,         anchorField = "lootAnchor" },
+        { check = questTrackerCheck, slider = questTrackerSlider, label = questTrackerSliderLabel, enable = "scaleQuestTracker", scale = "questTrackerScale",
+          setButtons = SetQuestTrackerButtonsEnabled, anchorButton = questTrackerAnchorButton, anchorField = "questTrackerAnchor" },
+        { check = arenaCheck,        slider = arenaSlider,        label = arenaSliderLabel,        enable = "scaleArenaFrames",  scale = "arenaFrameScale",
+          setButtons = SetArenaButtonsEnabled,        anchorButton = arenaAnchorButton,        anchorField = "arenaAnchor" },
+        { check = raidWarningCheck,  slider = raidWarningSlider,  label = raidWarningSliderLabel,  enable = "scaleRaidWarnings", scale = "raidWarningScale",
+          setButtons = SetRaidWarningButtonsEnabled,  anchorButton = raidWarningAnchorButton,  anchorField = "raidWarningAnchor" },
+        { check = belowMinimapCheck, slider = belowMinimapSlider, label = belowMinimapSliderLabel, enable = "scaleBelowMinimap", scale = "belowMinimapScale",
+          setButtons = SetBelowMinimapButtonsEnabled, anchorButton = belowMinimapAnchorButton, anchorField = "belowMinimapAnchor" },
+    }
+
     panel.refresh = function()
         isRefreshing = true
         chatCheck:SetChecked(FU:Get("unlockChat"))
-        
-        raidCheck:SetChecked(FU:Get("scaleRaidFrames"))
-        local scale = FU:Get("raidFrameScale") or 1.0
-        slider:SetValue(scale)
-        sliderLabel:SetText("Scale: " .. math.floor(scale * 100) .. "%")
-        SetSliderEnabled(slider, sliderLabel, FU:Get("scaleRaidFrames"))
-        
-        partyCheck:SetChecked(FU:Get("scalePartyFrames"))
-        local partyScale = FU:Get("partyFrameScale") or 1.0
-        partySlider:SetValue(partyScale)
-        partySliderLabel:SetText("Scale: " .. math.floor(partyScale * 100) .. "%")
-        SetSliderEnabled(partySlider, partySliderLabel, FU:Get("scalePartyFrames"))
-        
-        statusCheck:SetChecked(FU:Get("scaleStatusBars"))
-        local statusScale = FU:Get("statusBarScale") or 1.0
-        statusSlider:SetValue(statusScale)
-        statusSliderLabel:SetText("Scale: " .. math.floor(statusScale * 100) .. "%")
-        SetSliderEnabled(statusSlider, statusSliderLabel, FU:Get("scaleStatusBars"))
-        
-        local lootEnabled = FU:Get("scaleLootFrames")
-        lootCheck:SetChecked(lootEnabled)
-        local lootScale = FU:Get("lootFrameScale") or 1.0
-        lootSlider:SetValue(lootScale)
-        lootSliderLabel:SetText("Scale: " .. math.floor(lootScale * 100) .. "%")
-        SetSliderEnabled(lootSlider, lootSliderLabel, lootEnabled)
-        SetLootButtonsEnabled(lootEnabled)
-        
-        -- Update loot anchor button text based on current state
-        if FU.lootAnchor and FU.lootAnchor:IsShown() then
-            lootAnchorButton:SetText("Lock")
-        else
-            lootAnchorButton:SetText("Move")
+        for _, c in ipairs(scaleControls) do
+            local enabled = FU:Get(c.enable)
+            c.check:SetChecked(enabled)
+            local s = FU:Get(c.scale) or 1.0
+            c.slider:SetValue(s)
+            c.label:SetText("Scale: " .. math.floor(s * 100) .. "%")
+            SetSliderEnabled(c.slider, c.label, enabled)
+            if c.setButtons then c.setButtons(enabled) end
+            if c.anchorButton then
+                local shown = FU[c.anchorField] and FU[c.anchorField]:IsShown()
+                c.anchorButton:SetText(shown and "Lock" or "Move")
+            end
         end
-        
-        local questTrackerEnabled = FU:Get("scaleQuestTracker")
-        questTrackerCheck:SetChecked(questTrackerEnabled)
-        local questTrackerScale = FU:Get("questTrackerScale") or 1.0
-        questTrackerSlider:SetValue(questTrackerScale)
-        questTrackerSliderLabel:SetText("Scale: " .. math.floor(questTrackerScale * 100) .. "%")
-        SetSliderEnabled(questTrackerSlider, questTrackerSliderLabel, questTrackerEnabled)
-        SetQuestTrackerButtonsEnabled(questTrackerEnabled)
-        
-        -- Update quest tracker anchor button text based on current state
-        if FU.questTrackerAnchor and FU.questTrackerAnchor:IsShown() then
-            questTrackerAnchorButton:SetText("Lock")
-        else
-            questTrackerAnchorButton:SetText("Move")
-        end
-        
-        local arenaEnabled = FU:Get("scaleArenaFrames")
-        arenaCheck:SetChecked(arenaEnabled)
-        local arenaScale = FU:Get("arenaFrameScale") or 1.0
-        arenaSlider:SetValue(arenaScale)
-        arenaSliderLabel:SetText("Scale: " .. math.floor(arenaScale * 100) .. "%")
-        SetSliderEnabled(arenaSlider, arenaSliderLabel, arenaEnabled)
-        SetArenaButtonsEnabled(arenaEnabled)
-        
-        -- Update arena anchor button text based on current state
-        if FU.arenaAnchor and FU.arenaAnchor:IsShown() then
-            arenaAnchorButton:SetText("Lock")
-        else
-            arenaAnchorButton:SetText("Move")
-        end
-
-        local raidWarningEnabled = FU:Get("scaleRaidWarnings")
-        raidWarningCheck:SetChecked(raidWarningEnabled)
-        local rwScale = FU:Get("raidWarningScale") or 1.0
-        raidWarningSlider:SetValue(rwScale)
-        raidWarningSliderLabel:SetText("Scale: " .. math.floor(rwScale * 100) .. "%")
-        SetSliderEnabled(raidWarningSlider, raidWarningSliderLabel, raidWarningEnabled)
-        SetRaidWarningButtonsEnabled(raidWarningEnabled)
-
-        if FU.raidWarningAnchor and FU.raidWarningAnchor:IsShown() then
-            raidWarningAnchorButton:SetText("Lock")
-        else
-            raidWarningAnchorButton:SetText("Move")
-        end
-
         isRefreshing = false
     end
 
@@ -653,7 +478,7 @@ function FU:CreateOptionsPanel()
 end
 
 ---------------------------------------------------------------------
--- Slash command to open options
+-- Open / close the options panel
 ---------------------------------------------------------------------
 
 function FU:OpenOptions()
@@ -664,4 +489,203 @@ function FU:OpenOptions()
         InterfaceOptionsFrame_OpenToCategory(self.optionsPanel)
         InterfaceOptionsFrame_OpenToCategory(self.optionsPanel)
     end
+end
+
+-- Close whichever settings frame is open (modern Settings panel or legacy
+-- InterfaceOptions). Used when unlocking a frame so the anchor is unobstructed.
+function FU:CloseOptions()
+    if SettingsPanel and SettingsPanel:IsShown() then
+        HideUIPanel(SettingsPanel)
+    elseif InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() then
+        HideUIPanel(InterfaceOptionsFrame)
+    end
+end
+
+---------------------------------------------------------------------
+-- Edit Mode extras
+--
+-- Adds a compact FrameUnlocker control just beneath Blizzard's Edit Mode system
+-- dialog for the systems we cover: a scale slider for the raid/party unit frames,
+-- and an unlock checkbox for the chat frame -- so our settings sit right alongside
+-- Edit Mode's own without leaving Edit Mode.
+--
+-- Taint-safe by construction: the panel is parented to UIParent and only
+-- *anchored* to the dialog -- it is never injected into the dialog's frame
+-- hierarchy, and it only calls SetScale / our chat unlock (not protected actions).
+-- We attach via hooksecurefunc (a post-hook, which does not taint Blizzard's
+-- execution). Feature-detected: no-ops on clients without Edit Mode.
+---------------------------------------------------------------------
+
+function FU:SetupEditModeExtras()
+    if self.editModeExtrasReady then return end
+    if not (EditModeSystemSettingsDialog and EditModeSystemSettingsDialog.UpdateDialog
+        and Enum and Enum.EditModeSystem) then
+        return
+    end
+
+    local hasUnitFrame = Enum.EditModeSystem.UnitFrame ~= nil and Enum.EditModeUnitFrameSystemIndices ~= nil
+    local hasChatFrame = Enum.EditModeSystem.ChatFrame ~= nil
+    if not (hasUnitFrame or hasChatFrame) then return end
+
+    -- kind == "scale": drives the slider; kind == "toggle": drives the checkbox.
+    local unitFrameMap = hasUnitFrame and {
+        [Enum.EditModeUnitFrameSystemIndices.Raid]  = { kind = "scale", enable = "scaleRaidFrames",  scale = "raidFrameScale",  apply = FU.ApplyRaidFrameScale,  label = "Raid frame scale" },
+        [Enum.EditModeUnitFrameSystemIndices.Party] = { kind = "scale", enable = "scalePartyFrames", scale = "partyFrameScale", apply = FU.ApplyPartyFrameScale, label = "Party frame scale" },
+    } or {}
+    local chatConfig = { kind = "toggle", enable = "unlockChat", label = "Unlock chat frame" }
+
+    -- Emblem style to test: "logo" (logo.png) or "text" (a "FU" wordmark, F green /
+    -- U white -- echoes the Frame|Unlocker logo). Flip and /reload to compare.
+    local EMBLEM_STYLE = "logo"
+
+    local panel = CreateFrame("Frame", "FUEditModeExtrasPanel", UIParent,
+        BackdropTemplateMixin and "BackdropTemplate" or nil)
+    panel:SetSize(240, 40)
+    panel:SetFrameStrata("DIALOG")
+    panel:Hide()
+    if panel.SetBackdrop then
+        panel:SetBackdrop({
+            bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        })
+        panel:SetBackdropColor(0.05, 0.05, 0.07, 0.95)
+        panel:SetBackdropBorderColor(0.17, 0.71, 0.45, 1.0)
+    end
+
+    -- Hover shows which FrameUnlocker setting this is.
+    panel:EnableMouse(true)
+    panel:SetScript("OnEnter", function(self)
+        if not self.currentMap then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("|cff2BB673FrameUnlocker|r")
+        GameTooltip:AddLine(self.currentMap.label, 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    panel:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- Shared emblem on the left (logo texture, or a "FU" wordmark).
+    local emblem
+    if EMBLEM_STYLE == "logo" then
+        emblem = panel:CreateTexture(nil, "ARTWORK")
+        emblem:SetSize(26, 26)
+        emblem:SetPoint("LEFT", 10, 0)
+        emblem:SetTexture("Interface\\AddOns\\FrameUnlocker\\logo.png")
+    else
+        emblem = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        emblem:SetPoint("LEFT", 12, 0)
+        emblem:SetText("|cff2BB673F|r|cffffffffU|r")
+    end
+
+    -- Scale group (slider): "Scale" + slider + %. Shown for the scale systems.
+    local scaleGroup = CreateFrame("Frame", nil, panel)
+    scaleGroup:SetAllPoints(panel)
+    scaleGroup:Hide()
+
+    local scaleWord = scaleGroup:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    scaleWord:SetPoint("LEFT", emblem, "RIGHT", 6, 0)
+    scaleWord:SetText("|cffFFD100Scale|r")
+
+    local sLabel = scaleGroup:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    sLabel:SetPoint("RIGHT", -12, 0)
+    sLabel:SetWidth(40)
+    sLabel:SetJustifyH("RIGHT")
+    sLabel:SetText("100%")
+
+    local refreshing = false
+    local sliderTemplate = BackdropTemplateMixin
+        and "OptionsSliderTemplate, BackdropTemplate" or "OptionsSliderTemplate"
+    local slider = CreateFrame("Slider", nil, scaleGroup, sliderTemplate)
+    slider:SetPoint("LEFT", scaleWord, "RIGHT", 10, 0)
+    slider:SetPoint("RIGHT", sLabel, "LEFT", -8, 0)
+    slider:SetHeight(16)
+    slider:SetMinMaxValues(0.5, 1.5)
+    slider:SetValueStep(0.05)
+    slider:SetObeyStepOnDrag(true)
+    if slider.SetBackdrop then
+        slider:SetBackdrop({
+            bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
+            edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
+            tile = true, tileSize = 8, edgeSize = 8,
+            insets = { left = 3, right = 3, top = 6, bottom = 6 }
+        })
+    end
+    if slider.Low  then slider.Low:SetText("")  end
+    if slider.High then slider.High:SetText("") end
+    if slider.Text then slider.Text:SetText("") end
+
+    slider:SetScript("OnValueChanged", function(_, value)
+        if refreshing then return end
+        local m = panel.currentMap
+        if not m or m.kind ~= "scale" then return end
+        value = math.floor(value * 20 + 0.5) / 20
+        FU:Set(m.scale, value)
+        sLabel:SetText(math.floor(value * 100) .. "%")
+        -- Turn the feature on so the scale actually applies and persists across
+        -- reloads (ReapplyScaling only reapplies enabled features).
+        if not FU:Get(m.enable) then FU:Set(m.enable, true) end
+        m.apply(FU, value)
+        if FU.optionsPanel and FU.optionsPanel.refresh then FU.optionsPanel.refresh() end
+    end)
+
+    -- Toggle group (checkbox): shown for the chat frame.
+    local toggleGroup = CreateFrame("Frame", nil, panel)
+    toggleGroup:SetAllPoints(panel)
+    toggleGroup:Hide()
+
+    local check = CreateFrame("CheckButton", nil, toggleGroup, "InterfaceOptionsCheckButtonTemplate")
+    check:SetPoint("LEFT", emblem, "RIGHT", 8, 0)
+    check.Text:SetText("Unlock chat frame")
+    check:SetScript("OnClick", function(self)
+        local m = panel.currentMap
+        if not m or m.kind ~= "toggle" then return end
+        local checked = self:GetChecked()
+        FU:Set(m.enable, checked)
+        if checked then FU:UnlockChatFrame(ChatFrame1) else FU:LockChatFrame(ChatFrame1) end
+        if FU.optionsPanel and FU.optionsPanel.refresh then FU.optionsPanel.refresh() end
+    end)
+
+    local function resolve(systemFrame)
+        if not systemFrame then return nil end
+        if hasUnitFrame and systemFrame.system == Enum.EditModeSystem.UnitFrame then
+            return unitFrameMap[systemFrame.systemIndex]
+        elseif hasChatFrame and systemFrame.system == Enum.EditModeSystem.ChatFrame then
+            return chatConfig
+        end
+        return nil
+    end
+
+    -- Show/update beneath the dialog for a supported system, hide otherwise.
+    local function updateFor(systemFrame)
+        local m = resolve(systemFrame)
+        panel.currentMap = m
+        if not m then panel:Hide(); return end
+
+        refreshing = true
+        if m.kind == "scale" then
+            local s = FU:Get(m.scale) or 1.0
+            slider:SetValue(s)
+            sLabel:SetText(math.floor(s * 100) .. "%")
+        else
+            check:SetChecked(FU:Get(m.enable))
+        end
+        refreshing = false
+
+        scaleGroup:SetShown(m.kind == "scale")
+        toggleGroup:SetShown(m.kind == "toggle")
+
+        panel:ClearAllPoints()
+        panel:SetPoint("TOP", EditModeSystemSettingsDialog, "BOTTOM", 0, -4)
+        panel:SetWidth(EditModeSystemSettingsDialog:GetWidth())
+        panel:Show()
+    end
+
+    hooksecurefunc(EditModeSystemSettingsDialog, "UpdateDialog", function(_, systemFrame)
+        updateFor(systemFrame)
+    end)
+    EditModeSystemSettingsDialog:HookScript("OnHide", function() panel:Hide() end)
+
+    self.editModeExtrasPanel = panel
+    self.editModeExtrasReady = true
 end

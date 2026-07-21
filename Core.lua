@@ -9,6 +9,32 @@ function FU:Print(msg)
     end
 end
 
+---------------------------------------------------------------------
+-- Combat deferral
+-- Some Blizzard frames are secure/managed (e.g. ArenaEnemyFrames, the objective
+-- tracker); moving or reparenting them is blocked during combat and taints the
+-- addon. Queue that work and flush it when combat ends. Keyed so repeated requests
+-- (e.g. a burst of SetPoint hooks) coalesce to the latest. Init.lua flushes this
+-- on PLAYER_REGEN_ENABLED.
+---------------------------------------------------------------------
+
+local combatDeferred = {}
+
+function FU:InCombat()
+    return InCombatLockdown and InCombatLockdown()
+end
+
+function FU:DeferToCombatEnd(key, fn)
+    combatDeferred[key] = fn
+end
+
+function FU:FlushCombatDeferred()
+    if not next(combatDeferred) then return end
+    local pending = combatDeferred
+    combatDeferred = {}
+    for _, fn in pairs(pending) do fn() end
+end
+
 function FU:ApplyAllSettings()
     if self:Get("unlockChat") then
         self:UnlockChatFrame(ChatFrame1)
@@ -17,7 +43,6 @@ function FU:ApplyAllSettings()
     end
     self:ApplyRaidFrameScale(self:Get("scaleRaidFrames") and self:Get("raidFrameScale") or 1.0)
     self:ApplyPartyFrameScale(self:Get("scalePartyFrames") and self:Get("partyFrameScale") or 1.0)
-    self:ApplyStatusBarScale(self:Get("scaleStatusBars") and self:Get("statusBarScale") or 1.0)
     self:ApplyLootFrameScale(self:Get("scaleLootFrames") and self:Get("lootFrameScale") or 1.0)
     self:ApplyLootFramePosition()
     self:ApplyArenaFrameScale(self:Get("scaleArenaFrames") and self:Get("arenaFrameScale") or 1.0)
@@ -26,4 +51,6 @@ function FU:ApplyAllSettings()
     self:ApplyQuestTrackerPosition()
     self:ApplyRaidWarningScale(self:Get("scaleRaidWarnings") and self:Get("raidWarningScale") or 1.0)
     self:ApplyRaidWarningPosition()
+    self:ApplyBelowMinimapScale(self:Get("scaleBelowMinimap") and self:Get("belowMinimapScale") or 1.0)
+    self:ApplyBelowMinimapPosition()
 end

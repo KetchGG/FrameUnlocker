@@ -1,8 +1,9 @@
-## Interface: 11504
+## Interface: 11509
 ## Title: FrameUnlocker
 ## Notes: Unlock and customize UI frames - chat dragging, raid frame scaling, and more.
 ## Author: Ketch
-## Version: 1.5.0
+## Version: 1.6.0
+## IconTexture: Interface\AddOns\FrameUnlocker\logo.png
 ## SavedVariables: FrameUnlockerDB
 
 Config.lua

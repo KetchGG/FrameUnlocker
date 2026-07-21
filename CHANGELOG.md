@@ -1,5 +1,37 @@
 # Changelog
 
+## Version 1.6.0
+### Bug Fixes
+- **Combat-safe frame repositioning** - Arena/flag-carrier frames and the objective tracker are secure/managed and can't be moved during combat (doing so was blocked and tainted the addon). Both repositioning *and* resetting these frames is now queued during combat and applied automatically when combat ends.
+
+- **Loot roll flickering** - Repositioned loot rolls no longer flash at Blizzard's default spot before snapping into place; the correction now happens on the next frame rather than 100ms later.
+- **Loot roll stacking** - The roll stack is now anchored by its bottom edge, so multiple simultaneous rolls pile upward like Blizzard intends instead of the whole stack shifting every time a roll appears or expires. Existing saved positions are migrated automatically.
+- **Loot roll reset** - Resetting loot roll position now re-anchors the container explicitly instead of leaving it briefly unanchored.
+- **Party frame scaling in Classic Era** - Party scaling had no effect once the compact party frame had been created, because it took priority over the legacy `PartyMemberFrame`s that were actually on screen. Party and raid scaling also compounded when raid-style party frames were enabled, since Era nests the compact party frame inside the raid container. Scaling now follows whichever frames are actually displayed.
+- **Raid scale reapply in Classic Era** - The hook that reapplies raid scale after Blizzard rebuilds the frames only installed on Retail/TBC. Era exposes the same routine as a global function rather than a container method, so raid scale could briefly revert to default on some layout rebuilds; it's now hooked on Era too.
+
+- **Scaled frames landing off-position** - Repositioned frames (arena/flag carriers, quest tracker, loot rolls, raid warnings) drifted away from where the anchor was placed the further their scale was from 100%, because position offsets weren't corrected for the frame's scale. Frames now land where you drop the anchor at any scale, and adjusting the scale slider keeps them put.
+
+### New Features
+- **Below-minimap widgets** - New repositionable/scalable control for the below-minimap objective widget container.
+- **Edit Mode integration** - Selecting a frame in Blizzard's Edit Mode now shows a matching FrameUnlocker control beneath its dialog: a scale slider for Raid/Party Frames, and an unlock checkbox for the Chat Frame - so our settings sit right alongside Edit Mode's own.
+
+### Removed
+- **Status bar scaling** - Removed the status bar (XP/reputation) scaling option. Blizzard's Edit Mode now scales these bars natively, so the feature is redundant.
+
+### Improvements
+- **Move/Lock flow** - Clicking Move now closes the settings panel so the on-screen anchor is unobstructed, and clicking Lock on the anchor reopens settings automatically.
+- **Scale slider on anchors** - Each move anchor now has its own scale slider, so you can position and scale a frame together without going back to the settings panel.
+- **Simplified slash commands** - `/fu` now just opens settings and `/fu reset` restores defaults. The per-feature move commands (loot/arena/quest/warn/etc.) were removed; use the Move buttons in the settings panel instead.
+- **Settings panel** - Reorganized into two four-column sections ("Group and Gameplay Frames", "PvP and Misc") so everything fits on a single page without scrolling, even with the new PvP controls.
+- **Move anchors** - Enlarged the draggable position anchors and made their labels wrap, so the Scale/Lock buttons and titles no longer crowd or overflow.
+- **Client compatibility** - Updated interface versions for Retail 12.0.7, TBC Anniversary 2.5.6, and Classic Era 1.15.9.
+- **Addon list icon** - Added an `IconTexture` so FrameUnlocker shows its logo in the in-game AddOns list.
+
+### Technical
+- Internal combat-deferral queue in `Core.lua` (`InCombat`/`DeferToCombatEnd`/`FlushCombatDeferred`), flushed on `PLAYER_REGEN_ENABLED`.
+- Refactored the options panel's per-feature anchor/reset controls into a shared `CreatePositionControls` helper.
+
 ## Version 1.5.0
 ### New Features
 - **Classic Era Support** - Added `FrameUnlocker_Vanilla.toc` for WoW Classic Era (including Hardcore/Season of Discovery)

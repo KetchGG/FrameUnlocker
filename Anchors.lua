@@ -9,13 +9,21 @@ local addonName, FU = ...
 -- if anchor.SetBackdrop guard below instead of the mixin.
 local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
 
+-- Slider template with backdrop on modern clients (matches the options panel).
+local anchorSliderTemplate = BackdropTemplateMixin
+    and "OptionsSliderTemplate, BackdropTemplate" or "OptionsSliderTemplate"
+
 ---------------------------------------------------------------------
 -- Shared draggable anchor factory
+--
+-- Each anchor carries its own scale slider so scale can be tweaked while
+-- positioning without returning to the options panel, and a Lock button that
+-- saves the position and reopens the panel (see the move/lock flow in Options).
 ---------------------------------------------------------------------
 
 -- opts fields: name, width, height, point, relPoint, x, y,
 --   bgColor {r,g,b,a}, borderColor {r,g,b,a}, label,
---   btnWidth, btnHeight, btnInset, btnY, onLock, onDragStop
+--   scaleKey (setting key), applyScale (FU method), onLock, onDragStop
 local function CreatePositionAnchor(opts)
     local anchor = CreateFrame("Frame", opts.name, UIParent, backdropTemplate)
     anchor:SetSize(opts.width, opts.height)
@@ -39,26 +47,66 @@ local function CreatePositionAnchor(opts)
         anchor:SetBackdropBorderColor(br[1], br[2], br[3], br[4])
     end
 
+    -- Span the label across the anchor width (both sides) so long names wrap to a
+    -- second line and stay centered instead of spilling past the edges. The two-point
+    -- anchor tracks SetSize, so this holds when Show* resizes the anchor.
     local label = anchor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label:SetPoint("TOP", 0, -8)
+    label:SetPoint("TOPLEFT", 8, -10)
+    label:SetPoint("TOPRIGHT", -8, -10)
+    label:SetJustifyH("CENTER")
     label:SetText(opts.label)
 
-    local btnW  = opts.btnWidth  or 80
-    local btnH  = opts.btnHeight or 22
-    local inset = opts.btnInset  or 12
-    local btnY  = opts.btnY      or 6
+    -- Scale slider: adjust the frame's scale in place. Anchored below the label so
+    -- it follows a one- or two-line title.
+    local scaleText = anchor:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    scaleText:SetPoint("TOP", label, "BOTTOM", 0, -6)
+    scaleText:SetText("Scale: 100%")
 
-    local scaleBtn = CreateFrame("Button", nil, anchor, "UIPanelButtonTemplate")
-    scaleBtn:SetSize(btnW, btnH)
-    scaleBtn:SetPoint("BOTTOMLEFT", inset, btnY)
-    scaleBtn:SetText("Scale")
-    scaleBtn:SetScript("OnClick", function() FU:OpenOptions() end)
+    local scaleRefreshing = false
+    local scaleSlider = CreateFrame("Slider", nil, anchor, anchorSliderTemplate)
+    scaleSlider:SetPoint("TOP", scaleText, "BOTTOM", 0, -6)
+    scaleSlider:SetSize(140, 16)
+    scaleSlider:SetMinMaxValues(0.5, 1.5)
+    scaleSlider:SetValueStep(0.05)
+    scaleSlider:SetObeyStepOnDrag(true)
+    if scaleSlider.SetBackdrop then
+        scaleSlider:SetBackdrop({
+            bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
+            edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
+            tile = true, tileSize = 8, edgeSize = 8,
+            insets = { left = 3, right = 3, top = 6, bottom = 6 }
+        })
+    end
+    if scaleSlider.Low  then scaleSlider.Low:SetText("")  end
+    if scaleSlider.High then scaleSlider.High:SetText("") end
+    if scaleSlider.Text then scaleSlider.Text:SetText("") end
 
+    scaleSlider:SetScript("OnValueChanged", function(self, value)
+        if scaleRefreshing then return end
+        value = math.floor(value * 20 + 0.5) / 20
+        FU:Set(opts.scaleKey, value)
+        scaleText:SetText("Scale: " .. math.floor(value * 100) .. "%")
+        opts.applyScale(FU, value)
+    end)
+
+    -- Sync the slider to the saved scale each time the anchor is shown.
+    anchor:HookScript("OnShow", function()
+        scaleRefreshing = true
+        local s = FU:Get(opts.scaleKey) or 1.0
+        scaleSlider:SetValue(s)
+        scaleText:SetText("Scale: " .. math.floor(s * 100) .. "%")
+        scaleRefreshing = false
+    end)
+
+    -- Lock: run the per-feature save/hide, then reopen the options panel.
     local lockBtn = CreateFrame("Button", nil, anchor, "UIPanelButtonTemplate")
-    lockBtn:SetSize(btnW, btnH)
-    lockBtn:SetPoint("BOTTOMRIGHT", -inset, btnY)
+    lockBtn:SetSize(90, 22)
+    lockBtn:SetPoint("BOTTOM", 0, 8)
     lockBtn:SetText("Lock")
-    lockBtn:SetScript("OnClick", opts.onLock)
+    lockBtn:SetScript("OnClick", function()
+        opts.onLock()
+        FU:OpenOptions()
+    end)
 
     anchor:SetScript("OnDragStart", function(self) self:StartMoving() end)
     anchor:SetScript("OnDragStop", function(self)
@@ -73,21 +121,29 @@ end
 -- Per-anchor position save helpers (shared by OnDragStop and Hide)
 ---------------------------------------------------------------------
 
+-- Loot rolls are stored as the BOTTOM-centre of the roll stack, offset from
+-- UIParent's centre. Bottom rather than centre because Blizzard's container grows
+-- upward as rolls stack up -- anchoring the bottom keeps the first roll put and
+-- lets the rest pile on above it, instead of the whole stack shifting each time a
+-- roll appears or expires.
 local function saveLootPosition(anchor)
-    local x, y = anchor:GetCenter()
-    if not x then return end
+    local x = anchor:GetCenter()
+    local bottom = anchor:GetBottom()
+    if not x or not bottom then return end
     local uiX, uiY = UIParent:GetCenter()
     FU:Set("lootFrameX", x - uiX)
-    FU:Set("lootFrameY", y - uiY)
+    FU:Set("lootFrameY", bottom - uiY)
     FU:ApplyLootFramePosition()
 end
 
+-- Offsets are stored relative to UIParent's matching edge (right/top here, since
+-- these anchor TOPRIGHT), consistent with the raid-warning save below.
 local function saveArenaPosition(anchor)
     local right = anchor:GetRight()
     local top   = anchor:GetTop()
     if not right then return end
-    FU:Set("arenaFrameX", right - UIParent:GetWidth())
-    FU:Set("arenaFrameY", top   - UIParent:GetHeight())
+    FU:Set("arenaFrameX", right - UIParent:GetRight())
+    FU:Set("arenaFrameY", top   - UIParent:GetTop())
     FU:ApplyArenaFramePosition()
 end
 
@@ -95,8 +151,8 @@ local function saveQuestTrackerPosition(anchor)
     local right = anchor:GetRight()
     local top   = anchor:GetTop()
     if not right then return end
-    FU:Set("questTrackerX", right - UIParent:GetWidth())
-    FU:Set("questTrackerY", top   - UIParent:GetHeight())
+    FU:Set("questTrackerX", right - UIParent:GetRight())
+    FU:Set("questTrackerY", top   - UIParent:GetTop())
     FU:ApplyQuestTrackerPosition()
 end
 
@@ -111,6 +167,56 @@ local function saveRaidWarningPosition(anchor)
 end
 
 ---------------------------------------------------------------------
+-- Shared SetPoint hook
+-- Reapply our saved position shortly after Blizzard moves a frame, debounced so a
+-- burst of SetPoint calls coalesces into a single reapply. Per-feature differences
+-- (frame, keys, flags, debounce delay) come in via `spec`:
+--   frame, hookedFlag, repositioningFlag, enableKey, xKey, yKey, apply (FU method), delay
+---------------------------------------------------------------------
+
+local function HookFramePosition(spec)
+    local frame = spec.frame
+    if not frame or FU[spec.hookedFlag] then return end
+    local pending = false
+    hooksecurefunc(frame, "SetPoint", function()
+        if FU[spec.repositioningFlag] then return end
+        if not FU:Get(spec.enableKey) then return end
+        local x, y = FU:Get(spec.xKey), FU:Get(spec.yKey)
+        if x and x ~= false and y and y ~= false and not pending then
+            pending = true
+            C_Timer.After(spec.delay, function()
+                pending = false
+                spec.apply(FU)
+            end)
+        end
+    end)
+    FU[spec.hookedFlag] = true
+end
+
+---------------------------------------------------------------------
+-- Scale-aware SetPoint offset
+--
+-- Saved offsets are measured in UIParent space: the drag anchor is an unscaled
+-- UIParent child, so its GetRight()/GetTop()/GetCenter() differences are in
+-- UIParent's coordinate space. But SetPoint interprets its x/y offsets in the
+-- *anchored frame's own* coordinate space (its effective scale). A frame with
+-- SetScale(S) therefore lands S times too far from the anchor corner -- the
+-- misalignment gets worse the further you scale from 1.0.
+--
+-- Convert by the ratio of effective scales so the frame's corner lands at the
+-- saved screen position regardless of its scale. Read live from the frame, so it
+-- stays correct across UI-scale changes and non-UIParent parents; this is why
+-- Apply*Scale re-applies position (the ratio changes when the frame is rescaled).
+---------------------------------------------------------------------
+
+local function ScaledOffset(frame, x, y)
+    local fs = frame:GetEffectiveScale()
+    if not fs or fs == 0 then return x, y end
+    local ratio = UIParent:GetEffectiveScale() / fs
+    return x * ratio, y * ratio
+end
+
+---------------------------------------------------------------------
 -- Loot Roll Frame Anchor and Scaling
 ---------------------------------------------------------------------
 
@@ -118,11 +224,12 @@ function FU:CreateLootAnchor()
     if self.lootAnchor then return self.lootAnchor end
     self.lootAnchor = CreatePositionAnchor({
         name        = "FULootAnchor",
-        width       = 220, height = 60,
+        width       = 240, height = 108,
         point       = "CENTER", relPoint = "CENTER", x = 0, y = 0,
         bgColor     = { 0.07, 0.29, 0.18, 0.85 },
         borderColor = { 0.17, 0.71, 0.45, 1.0  },
         label       = "Loot Roll Anchor",
+        scaleKey    = "lootFrameScale", applyScale = FU.ApplyLootFrameScale,
         onLock = function()
             FU:HideLootAnchor()
             if FU.optionsPanel and FU.optionsPanel.lootAnchorButton then
@@ -140,16 +247,16 @@ function FU:ShowLootAnchor()
     local y = self:Get("lootFrameY")
     anchor:ClearAllPoints()
     if x and x ~= false and y and y ~= false then
-        anchor:SetPoint("CENTER", UIParent, "CENTER", x, y)
+        anchor:SetPoint("BOTTOM", UIParent, "CENTER", x, y)
     else
         -- Default to where GroupLootContainer usually is
-        anchor:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
+        anchor:SetPoint("BOTTOM", UIParent, "CENTER", 0, -100)
     end
     -- Size to one loot roll item; GroupLootFrame1 may not exist until a roll is active
     local ref = GroupLootFrame1
     local w = (ref and ref:GetWidth()  > 0) and ref:GetWidth()  or 300
     local h = (ref and ref:GetHeight() > 0) and ref:GetHeight() or 60
-    anchor:SetSize(math.max(w, 180), math.max(h, 52))
+    anchor:SetSize(math.max(w, 240), math.max(h, 108))
     anchor:Show()
     self:Print("Drag the anchor to reposition loot roll frames. Click 'Lock' when done.")
 end
@@ -183,17 +290,24 @@ function FU:ApplyLootFramePosition()
         -- Flag prevents the SetPoint hook below from re-triggering us
         self.lootFrameRepositioning = true
         GroupLootContainer:ClearAllPoints()
-        GroupLootContainer:SetPoint("CENTER", UIParent, "CENTER", x, y)
+        -- BOTTOM, so the stack grows upward as rolls accumulate (see saveLootPosition)
+        local ox, oy = ScaledOffset(GroupLootContainer, x, y)
+        GroupLootContainer:SetPoint("BOTTOM", UIParent, "CENTER", ox, oy)
         self.lootFrameRepositioning = false
     end
 end
 
 local function ResetLootContainerToDefault()
-    if GroupLootContainer then
-        GroupLootContainer:ClearAllPoints()
-        if GroupLootContainer.Layout then
-            GroupLootContainer:Layout()
-        end
+    if not GroupLootContainer then return end
+
+    -- Re-anchor explicitly before laying out: Layout() reflows the child roll
+    -- frames but does not necessarily re-anchor the container itself, so clearing
+    -- points without setting one can leave it with no anchor at all.
+    GroupLootContainer:ClearAllPoints()
+    GroupLootContainer:SetPoint("BOTTOM", UIParent, "CENTER", 0, -100)
+
+    if GroupLootContainer.Layout then
+        GroupLootContainer:Layout()
     end
 end
 
@@ -235,27 +349,20 @@ function FU:ApplyLootFrameScale(scale)
         local frame = _G["GroupLootFrame" .. i]
         if frame then frame:SetScale(scale) end
     end
+
+    -- Scale changes the offset ratio (see ScaledOffset), so reapply position.
+    self:ApplyLootFramePosition()
 end
 
 function FU:HookLootFramePosition()
-    if GroupLootContainer and not self.lootFrameHooked then
-        local pendingReposition = false
-        hooksecurefunc(GroupLootContainer, "SetPoint", function()
-            if FU.lootFrameRepositioning then return end
-            if not FU:Get("scaleLootFrames") then return end
-            local x = FU:Get("lootFrameX")
-            local y = FU:Get("lootFrameY")
-            if x and x ~= false and y and y ~= false then
-                if pendingReposition then return end
-                pendingReposition = true
-                C_Timer.After(0.1, function()
-                    pendingReposition = false
-                    FU:ApplyLootFramePosition()
-                end)
-            end
-        end)
-        self.lootFrameHooked = true
-    end
+    HookFramePosition({
+        frame = GroupLootContainer, hookedFlag = "lootFrameHooked",
+        repositioningFlag = "lootFrameRepositioning", enableKey = "scaleLootFrames",
+        xKey = "lootFrameX", yKey = "lootFrameY",
+        -- next frame: a longer delay leaves the container visibly parked at
+        -- Blizzard's position before we correct it, which reads as a flicker
+        apply = FU.ApplyLootFramePosition, delay = 0,
+    })
 end
 
 ---------------------------------------------------------------------
@@ -266,12 +373,12 @@ function FU:CreateArenaAnchor()
     if self.arenaAnchor then return self.arenaAnchor end
     self.arenaAnchor = CreatePositionAnchor({
         name        = "FUArenaAnchor",
-        width       = 180, height = 50,
+        width       = 240, height = 108,
         point       = "TOPRIGHT", relPoint = "TOPRIGHT", x = -100, y = -200,
         bgColor     = { 0.07, 0.29, 0.18, 0.85 },
         borderColor = { 0.17, 0.71, 0.45, 1.0  },
         label       = "Arena/Flag Carrier Anchor",
-        btnWidth = 70, btnHeight = 20, btnInset = 8, btnY = 6,
+        scaleKey    = "arenaFrameScale", applyScale = FU.ApplyArenaFrameScale,
         onLock = function()
             FU:HideArenaAnchor()
             if FU.optionsPanel and FU.optionsPanel.arenaAnchorButton then
@@ -298,7 +405,7 @@ function FU:ShowArenaAnchor()
     local ref = _G["ArenaEnemyFrame1"]
     local frameW = (ref and ref:GetWidth()  > 0) and ref:GetWidth()  or 235
     local frameH = (ref and ref:GetHeight() > 0) and ref:GetHeight() or 18
-    anchor:SetSize(math.max(frameW, 180), math.max(frameH * 3 + 4, 52))
+    anchor:SetSize(math.max(frameW, 240), math.max(frameH * 3 + 4, 108))
     anchor:Show()
     self:Print("Drag the anchor to reposition arena/flag carrier frames. Click 'Lock' when done.")
 end
@@ -327,20 +434,35 @@ function FU:ApplyArenaFramePosition()
     local x = self:Get("arenaFrameX")
     local y = self:Get("arenaFrameY")
     if not x or x == false or not y or y == false then return end
+    if not ArenaEnemyFrames then return end
 
-    if ArenaEnemyFrames then
-        self.arenaFrameRepositioning = true
-        ArenaEnemyFrames:ClearAllPoints()
-        ArenaEnemyFrames:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", x, y)
-        self.arenaFrameRepositioning = false
+    -- ArenaEnemyFrames is secure; moving it is blocked in combat (and arena/BG
+    -- combat is exactly when these appear). Defer to combat end.
+    if self:InCombat() then
+        self:DeferToCombatEnd("arenaPosition", function() self:ApplyArenaFramePosition() end)
+        return
     end
+
+    self.arenaFrameRepositioning = true
+    ArenaEnemyFrames:ClearAllPoints()
+    local ox, oy = ScaledOffset(ArenaEnemyFrames, x, y)
+    ArenaEnemyFrames:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", ox, oy)
+    self.arenaFrameRepositioning = false
 end
 
 local function ResetArenaContainerToDefault()
-    if ArenaEnemyFrames then
-        ArenaEnemyFrames:ClearAllPoints()
-        ArenaEnemyFrames:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -100, -200)
+    if not ArenaEnemyFrames then return end
+
+    -- Same combat restriction as ApplyArenaFramePosition. Shares the "arenaPosition"
+    -- key so a queued apply and a queued reset don't both run at combat end -- the
+    -- last thing the user asked for wins.
+    if FU:InCombat() then
+        FU:DeferToCombatEnd("arenaPosition", ResetArenaContainerToDefault)
+        return
     end
+
+    ArenaEnemyFrames:ClearAllPoints()
+    ArenaEnemyFrames:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -100, -200)
 end
 
 function FU:ResetArenaFrameToDefault()
@@ -381,27 +503,18 @@ function FU:ApplyArenaFrameScale(scale)
         local frame = _G["ArenaEnemyFrame" .. i]
         if frame then frame:SetScale(scale) end
     end
+
+    -- Scale changes the offset ratio (see ScaledOffset), so reapply position.
+    self:ApplyArenaFramePosition()
 end
 
 function FU:HookArenaFramePosition()
-    if ArenaEnemyFrames and not self.arenaFrameHooked then
-        local pendingReposition = false
-        hooksecurefunc(ArenaEnemyFrames, "SetPoint", function()
-            if FU.arenaFrameRepositioning then return end
-            if not FU:Get("scaleArenaFrames") then return end
-            local x = FU:Get("arenaFrameX")
-            local y = FU:Get("arenaFrameY")
-            if x and x ~= false and y and y ~= false then
-                if pendingReposition then return end
-                pendingReposition = true
-                C_Timer.After(0.1, function()
-                    pendingReposition = false
-                    FU:ApplyArenaFramePosition()
-                end)
-            end
-        end)
-        self.arenaFrameHooked = true
-    end
+    HookFramePosition({
+        frame = ArenaEnemyFrames, hookedFlag = "arenaFrameHooked",
+        repositioningFlag = "arenaFrameRepositioning", enableKey = "scaleArenaFrames",
+        xKey = "arenaFrameX", yKey = "arenaFrameY",
+        apply = FU.ApplyArenaFramePosition, delay = 0.1,
+    })
 end
 
 ---------------------------------------------------------------------
@@ -417,11 +530,12 @@ function FU:CreateQuestTrackerAnchor()
     if self.questTrackerAnchor then return self.questTrackerAnchor end
     self.questTrackerAnchor = CreatePositionAnchor({
         name        = "FUQuestTrackerAnchor",
-        width       = 220, height = 60,
+        width       = 240, height = 108,
         point       = "TOPRIGHT", relPoint = "TOPRIGHT", x = -50, y = -200,
         bgColor     = { 0.07, 0.29, 0.18, 0.85 },
         borderColor = { 0.17, 0.71, 0.45, 1.0  },
         label       = "Quest Tracker Anchor",
+        scaleKey    = "questTrackerScale", applyScale = FU.ApplyQuestTrackerScale,
         onLock = function()
             FU:HideQuestTrackerAnchor()
             if FU.optionsPanel and FU.optionsPanel.questTrackerAnchorButton then
@@ -448,7 +562,7 @@ function FU:ShowQuestTrackerAnchor()
     local tracker = GetQuestTrackerFrame()
     local w = (tracker and tracker:GetWidth()  > 10) and tracker:GetWidth()  or 240
     local h = (tracker and tracker:GetHeight() > 10) and tracker:GetHeight() or 150
-    anchor:SetSize(math.max(w, 180), math.max(h, 52))
+    anchor:SetSize(math.max(w, 240), math.max(h, 108))
     anchor:Show()
     self:Print("Drag the anchor to reposition quest tracker. Click 'Lock' when done.")
 end
@@ -479,37 +593,52 @@ function FU:ApplyQuestTrackerPosition()
     if not x or x == false or not y or y == false then return end
 
     local tracker = GetQuestTrackerFrame()
-    if tracker then
-        self.questTrackerRepositioning = true
+    if not tracker then return end
 
-        -- Removed from Blizzard's managed layout system to prevent flickering
-        -- when the tracker is repositioned; restored to defaults on reset.
-        tracker.isManagedFrame = false
-        tracker.isRightManagedFrame = false
-
-        if tracker:GetParent() ~= UIParent then
-            tracker:SetParent(UIParent)
-        end
-
-        tracker:ClearAllPoints()
-        tracker:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", x, y)
-        self.questTrackerRepositioning = false
+    -- Reparenting / SetPoint on the managed objective tracker is blocked in combat.
+    if self:InCombat() then
+        self:DeferToCombatEnd("questTrackerPosition", function() self:ApplyQuestTrackerPosition() end)
+        return
     end
+
+    self.questTrackerRepositioning = true
+
+    -- Removed from Blizzard's managed layout system to prevent flickering
+    -- when the tracker is repositioned; restored to defaults on reset.
+    tracker.isManagedFrame = false
+    tracker.isRightManagedFrame = false
+
+    if tracker:GetParent() ~= UIParent then
+        tracker:SetParent(UIParent)
+    end
+
+    tracker:ClearAllPoints()
+    local ox, oy = ScaledOffset(tracker, x, y)
+    tracker:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", ox, oy)
+    self.questTrackerRepositioning = false
 end
 
 local function ResetQuestTrackerInternal()
     local tracker = GetQuestTrackerFrame()
-    if tracker then
-        tracker.isManagedFrame = true
-        tracker.isRightManagedFrame = true
+    if not tracker then return end
 
-        if UIParentRightManagedFrameContainer then
-            tracker:SetParent(UIParentRightManagedFrameContainer)
-        end
-
-        tracker:ClearAllPoints()
-        tracker:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -50, -200)
+    -- Reparenting the tracker back under the managed container is blocked in combat,
+    -- same as ApplyQuestTrackerPosition. Shares that applier's deferral key so an
+    -- apply and a reset can't both be queued for combat end.
+    if FU:InCombat() then
+        FU:DeferToCombatEnd("questTrackerPosition", ResetQuestTrackerInternal)
+        return
     end
+
+    tracker.isManagedFrame = true
+    tracker.isRightManagedFrame = true
+
+    if UIParentRightManagedFrameContainer then
+        tracker:SetParent(UIParentRightManagedFrameContainer)
+    end
+
+    tracker:ClearAllPoints()
+    tracker:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -50, -200)
 end
 
 function FU:ResetQuestTrackerToDefault()
@@ -544,29 +673,19 @@ function FU:ApplyQuestTrackerScale(scale)
     if tracker then
         tracker:SetScale(scale)
     end
+
+    -- Scale changes the offset ratio (see ScaledOffset), so reapply position.
+    self:ApplyQuestTrackerPosition()
 end
 
 function FU:HookQuestTrackerPosition()
-    local tracker = GetQuestTrackerFrame()
-    if tracker and not self.questTrackerHooked then
-        local pendingReposition = false
-        hooksecurefunc(tracker, "SetPoint", function()
-            if FU.questTrackerRepositioning then return end
-            if not FU:Get("scaleQuestTracker") then return end
-            local x = FU:Get("questTrackerX")
-            local y = FU:Get("questTrackerY")
-            if x and x ~= false and y and y ~= false then
-                if pendingReposition then return end
-                pendingReposition = true
-                -- Minimal delay (next frame) to reduce flicker
-                C_Timer.After(0, function()
-                    pendingReposition = false
-                    FU:ApplyQuestTrackerPosition()
-                end)
-            end
-        end)
-        self.questTrackerHooked = true
-    end
+    HookFramePosition({
+        frame = GetQuestTrackerFrame(), hookedFlag = "questTrackerHooked",
+        repositioningFlag = "questTrackerRepositioning", enableKey = "scaleQuestTracker",
+        xKey = "questTrackerX", yKey = "questTrackerY",
+        apply = FU.ApplyQuestTrackerPosition,
+        delay = 0,  -- next frame: minimal delay to reduce tracker flicker
+    })
 end
 
 ---------------------------------------------------------------------
@@ -577,11 +696,12 @@ function FU:CreateRaidWarningAnchor()
     if self.raidWarningAnchor then return self.raidWarningAnchor end
     self.raidWarningAnchor = CreatePositionAnchor({
         name        = "FURaidWarningAnchor",
-        width       = 260, height = 50,
+        width       = 260, height = 108,
         point       = "TOP", relPoint = "TOP", x = 0, y = -200,
         bgColor     = { 0.07, 0.29, 0.18, 0.85 },
         borderColor = { 0.17, 0.71, 0.45, 1.0  },
         label       = "Raid Warning / Death Alert Anchor",
+        scaleKey    = "raidWarningScale", applyScale = FU.ApplyRaidWarningScale,
         onLock = function()
             FU:HideRaidWarningAnchor()
             if FU.optionsPanel and FU.optionsPanel.raidWarningAnchorButton then
@@ -606,7 +726,7 @@ function FU:ShowRaidWarningAnchor()
     -- RaidWarningFrame is a fixed-size container; read its dimensions directly
     local w = (RaidWarningFrame and RaidWarningFrame:GetWidth()  > 0) and RaidWarningFrame:GetWidth()  or 500
     local h = (RaidWarningFrame and RaidWarningFrame:GetHeight() > 0) and RaidWarningFrame:GetHeight() or 50
-    anchor:SetSize(math.max(w, 180), math.max(h, 52))
+    anchor:SetSize(math.max(w, 240), math.max(h, 108))
     anchor:Show()
     self:Print("Drag the anchor to reposition raid warnings / death alerts. Click 'Lock' when done.")
 end
@@ -634,6 +754,9 @@ function FU:ApplyRaidWarningScale(scale)
     if RaidWarningFrame then
         RaidWarningFrame:SetScale(scale)
     end
+
+    -- Scale changes the offset ratio (see ScaledOffset), so reapply position.
+    self:ApplyRaidWarningPosition()
 end
 
 function FU:ApplyRaidWarningPosition()
@@ -646,7 +769,8 @@ function FU:ApplyRaidWarningPosition()
     if RaidWarningFrame then
         self.raidWarningRepositioning = true
         RaidWarningFrame:ClearAllPoints()
-        RaidWarningFrame:SetPoint("TOP", UIParent, "TOP", x, y)
+        local ox, oy = ScaledOffset(RaidWarningFrame, x, y)
+        RaidWarningFrame:SetPoint("TOP", UIParent, "TOP", ox, oy)
         self.raidWarningRepositioning = false
     end
 end
@@ -681,22 +805,185 @@ function FU:ResetRaidWarningPosition()
 end
 
 function FU:HookRaidWarningPosition()
-    if RaidWarningFrame and not self.raidWarningHooked then
-        local pendingReposition = false
-        hooksecurefunc(RaidWarningFrame, "SetPoint", function()
-            if FU.raidWarningRepositioning then return end
-            if not FU:Get("scaleRaidWarnings") then return end
-            local x = FU:Get("raidWarningX")
-            local y = FU:Get("raidWarningY")
-            if x and x ~= false and y and y ~= false then
-                if pendingReposition then return end
-                pendingReposition = true
-                C_Timer.After(0, function()
-                    pendingReposition = false
-                    FU:ApplyRaidWarningPosition()
-                end)
+    HookFramePosition({
+        frame = RaidWarningFrame, hookedFlag = "raidWarningHooked",
+        repositioningFlag = "raidWarningRepositioning", enableKey = "scaleRaidWarnings",
+        xKey = "raidWarningX", yKey = "raidWarningY",
+        apply = FU.ApplyRaidWarningPosition, delay = 0,
+    })
+end
+
+---------------------------------------------------------------------
+-- Below-Minimap Widget Container (world/PvP objective displays)
+--
+-- UIWidgetBelowMinimapContainerFrame is a *managed* frame: it inherits
+-- UIParentRightManagedFrameTemplate and is laid out by
+-- UIParentRightManagedFrameContainer (the same system as the objective/quest
+-- tracker). Like the tracker, we must remove it from that managed layout before
+-- we can freely position it, and restore it on reset -- otherwise Blizzard's
+-- layout keeps yanking it back (flicker). Reparenting is blocked in combat, so
+-- ApplyBelowMinimapPosition defers like the tracker does.
+---------------------------------------------------------------------
+
+local function saveBelowMinimapPosition(anchor)
+    local right = anchor:GetRight()
+    local top   = anchor:GetTop()
+    if not right then return end
+    FU:Set("belowMinimapX", right - UIParent:GetRight())
+    FU:Set("belowMinimapY", top   - UIParent:GetTop())
+    FU:ApplyBelowMinimapPosition()
+end
+
+function FU:CreateBelowMinimapAnchor()
+    if self.belowMinimapAnchor then return self.belowMinimapAnchor end
+    self.belowMinimapAnchor = CreatePositionAnchor({
+        name        = "FUBelowMinimapAnchor",
+        width       = 240, height = 108,
+        point       = "TOPRIGHT", relPoint = "TOPRIGHT", x = -50, y = -220,
+        bgColor     = { 0.07, 0.29, 0.18, 0.85 },
+        borderColor = { 0.17, 0.71, 0.45, 1.0  },
+        label       = "Below-Minimap Widget Anchor",
+        scaleKey    = "belowMinimapScale", applyScale = FU.ApplyBelowMinimapScale,
+        onLock = function()
+            FU:HideBelowMinimapAnchor()
+            if FU.optionsPanel and FU.optionsPanel.belowMinimapAnchorButton then
+                FU.optionsPanel.belowMinimapAnchorButton:SetText("Move")
             end
-        end)
-        self.raidWarningHooked = true
+        end,
+        onDragStop = saveBelowMinimapPosition,
+    })
+    return self.belowMinimapAnchor
+end
+
+function FU:ShowBelowMinimapAnchor()
+    local anchor = self:CreateBelowMinimapAnchor()
+    local x = self:Get("belowMinimapX")
+    local y = self:Get("belowMinimapY")
+    anchor:ClearAllPoints()
+    if x and x ~= false and y and y ~= false then
+        anchor:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", x, y)
+    else
+        anchor:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -50, -220)
     end
+    local f = UIWidgetBelowMinimapContainerFrame
+    local w = (f and f:GetWidth()  > 0) and f:GetWidth()  or 200
+    local h = (f and f:GetHeight() > 0) and f:GetHeight() or 44
+    anchor:SetSize(math.max(w, 240), math.max(h, 108))
+    anchor:Show()
+    self:Print("Drag the anchor to reposition the below-minimap widgets. Click 'Lock' when done.")
+end
+
+function FU:HideBelowMinimapAnchor()
+    if self.belowMinimapAnchor then
+        saveBelowMinimapPosition(self.belowMinimapAnchor)
+        self.belowMinimapAnchor:Hide()
+        self:Print("Below-minimap widget position saved.")
+    end
+end
+
+function FU:ToggleBelowMinimapAnchor()
+    if self.belowMinimapAnchor and self.belowMinimapAnchor:IsShown() then
+        self:HideBelowMinimapAnchor()
+        return false
+    else
+        self:ShowBelowMinimapAnchor()
+        return true
+    end
+end
+
+function FU:ApplyBelowMinimapScale(scale)
+    scale = scale or self:Get("belowMinimapScale") or 1.0
+    if UIWidgetBelowMinimapContainerFrame then
+        UIWidgetBelowMinimapContainerFrame:SetScale(scale)
+    end
+
+    -- Scale changes the offset ratio (see ScaledOffset), so reapply position.
+    self:ApplyBelowMinimapPosition()
+end
+
+function FU:ApplyBelowMinimapPosition()
+    if not self:Get("scaleBelowMinimap") then return end
+
+    local x = self:Get("belowMinimapX")
+    local y = self:Get("belowMinimapY")
+    if not x or x == false or not y or y == false then return end
+
+    local f = UIWidgetBelowMinimapContainerFrame
+    if not f then return end
+
+    -- Reparenting / SetPoint on the managed container is blocked in combat.
+    if self:InCombat() then
+        self:DeferToCombatEnd("belowMinimapPosition", function() self:ApplyBelowMinimapPosition() end)
+        return
+    end
+
+    self.belowMinimapRepositioning = true
+
+    -- Remove from Blizzard's managed layout so it stops re-anchoring (see tracker).
+    f.isManagedFrame = false
+    f.isRightManagedFrame = false
+    if f:GetParent() ~= UIParent then
+        f:SetParent(UIParent)
+    end
+
+    f:ClearAllPoints()
+    local ox, oy = ScaledOffset(f, x, y)
+    f:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", ox, oy)
+    self.belowMinimapRepositioning = false
+end
+
+local function ResetBelowMinimapInternal()
+    local f = UIWidgetBelowMinimapContainerFrame
+    if not f then return end
+
+    -- Restoring managed status reparents it in combat, same block as the tracker.
+    if FU:InCombat() then
+        FU:DeferToCombatEnd("belowMinimapPosition", ResetBelowMinimapInternal)
+        return
+    end
+
+    f.isManagedFrame = true
+    f.isRightManagedFrame = true
+
+    if UIParentRightManagedFrameContainer then
+        f:SetParent(UIParentRightManagedFrameContainer)
+    end
+
+    f:ClearAllPoints()
+    f:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -50, -220)
+end
+
+function FU:ResetBelowMinimapToDefault()
+    ResetBelowMinimapInternal()
+end
+
+function FU:ResetBelowMinimapPosition()
+    self:Set("belowMinimapX", false)
+    self:Set("belowMinimapY", false)
+    self:Set("belowMinimapScale", 1.0)
+
+    if self.belowMinimapAnchor and self.belowMinimapAnchor:IsShown() then
+        self.belowMinimapAnchor:Hide()
+        if self.optionsPanel and self.optionsPanel.belowMinimapAnchorButton then
+            self.optionsPanel.belowMinimapAnchorButton:SetText("Move")
+        end
+    end
+
+    self:ApplyBelowMinimapScale(1.0)
+    ResetBelowMinimapInternal()
+
+    if self.optionsPanel and self.optionsPanel.refresh then
+        self.optionsPanel.refresh()
+    end
+
+    self:Print("Below-minimap widgets reset to default.")
+end
+
+function FU:HookBelowMinimapPosition()
+    HookFramePosition({
+        frame = UIWidgetBelowMinimapContainerFrame, hookedFlag = "belowMinimapHooked",
+        repositioningFlag = "belowMinimapRepositioning", enableKey = "scaleBelowMinimap",
+        xKey = "belowMinimapX", yKey = "belowMinimapY",
+        apply = FU.ApplyBelowMinimapPosition, delay = 0,
+    })
 end

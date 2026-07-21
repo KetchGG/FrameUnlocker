@@ -30,9 +30,6 @@ local function ReapplyScaling()
     if FU:Get("scalePartyFrames") then
         FU:ApplyPartyFrameScale()
     end
-    if FU:Get("scaleStatusBars") then
-        FU:ApplyStatusBarScale()
-    end
     if FU:Get("scaleLootFrames") then
         FU:ApplyLootFrameScale()
     end
@@ -49,6 +46,10 @@ local function ReapplyScaling()
         FU:ApplyRaidWarningScale()
     end
     FU:ApplyRaidWarningPosition()
+    if FU:Get("scaleBelowMinimap") then
+        FU:ApplyBelowMinimapScale()
+    end
+    FU:ApplyBelowMinimapPosition()
 end
 
 ---------------------------------------------------------------------
@@ -101,6 +102,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         FU:HookArenaFramePosition()
         FU:HookQuestTrackerPosition()
         FU:HookRaidWarningPosition()
+        FU:HookBelowMinimapPosition()
 
         -- Register events that may require reapplying settings
         self:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -108,6 +110,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
         self:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
         self:RegisterEvent("ARENA_OPPONENT_UPDATE")
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")  -- flush combat-deferred frame moves
 
         -- Hook Edit Mode (frames exist now after login, not available in Classic Era)
         if EditModeManagerFrame and EditModeManagerFrame.HookScript then
@@ -116,15 +119,25 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             EditModeManager:HookScript("OnHide", OnEditModeExit)
         end
 
-        -- Hook raid frame layout updates (if available)
+        -- Add our controls to the Edit Mode raid/party (scale) and chat (unlock)
+        -- dialogs (self-guards on clients without Edit Mode).
+        FU:SetupEditModeExtras()
+
+        -- Hook raid frame layout updates so our scale is reapplied after Blizzard
+        -- rebuilds the frames. Retail/TBC expose ApplyToFrames as a mixin method on
+        -- the container; Classic Era has no mixin -- it's a plain global that takes
+        -- the container as its first arg. Hook whichever form the client provides.
+        local function ReapplyRaidLayout()
+            if FU:Get("scaleRaidFrames") then
+                ThrottledCall("raidLayout", 0.1, function()
+                    FU:ApplyRaidFrameScale()
+                end)
+            end
+        end
         if CompactRaidFrameContainer and CompactRaidFrameContainer.ApplyToFrames then
-            hooksecurefunc(CompactRaidFrameContainer, "ApplyToFrames", function()
-                if FU:Get("scaleRaidFrames") then
-                    ThrottledCall("raidLayout", 0.1, function()
-                        FU:ApplyRaidFrameScale()
-                    end)
-                end
-            end)
+            hooksecurefunc(CompactRaidFrameContainer, "ApplyToFrames", ReapplyRaidLayout)
+        elseif CompactRaidFrameContainer_ApplyToFrames then
+            hooksecurefunc("CompactRaidFrameContainer_ApplyToFrames", ReapplyRaidLayout)
         end
 
         FU:Print("Initialized. Type /fu for options.")
@@ -149,13 +162,18 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         ThrottledCall("enterWorld", 0.5, ReapplyScaling)
 
     elseif event == "ARENA_PREP_OPPONENT_SPECIALIZATIONS" or event == "ARENA_OPPONENT_UPDATE" then
-        -- Reapply arena frame settings when entering arena/BG with flag carriers
+        -- Reapply arena frame settings when entering arena/BG with flag carriers.
+        -- ApplyArenaFramePosition defers itself if we're in combat (arena frames are
+        -- secure and can't be moved then); it reapplies on PLAYER_REGEN_ENABLED.
         ThrottledCall("arenaFrames", 0.3, function()
             if FU:Get("scaleArenaFrames") then
                 FU:ApplyArenaFrameScale()
                 FU:ApplyArenaFramePosition()
             end
         end)
+
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        FU:FlushCombatDeferred()
     end
 end)
 
@@ -169,45 +187,7 @@ SLASH_FRAMEUNLOCKER2 = "/frameunlocker"
 SlashCmdList.FRAMEUNLOCKER = function(msg)
     msg = strtrim(strlower(msg or ""))
 
-    if msg == "options" or msg == "config" or msg == "settings" then
-        FU:OpenOptions()
-    elseif msg == "loot" then
-        -- Enable loot frame customization if not already enabled
-        if not FU:Get("scaleLootFrames") then
-            FU:Set("scaleLootFrames", true)
-            if FU.optionsPanel and FU.optionsPanel.refresh then
-                FU.optionsPanel.refresh()
-            end
-        end
-        FU:ToggleLootAnchor()
-    elseif msg == "arena" then
-        -- Enable arena frame customization if not already enabled
-        if not FU:Get("scaleArenaFrames") then
-            FU:Set("scaleArenaFrames", true)
-            if FU.optionsPanel and FU.optionsPanel.refresh then
-                FU.optionsPanel.refresh()
-            end
-        end
-        FU:ToggleArenaAnchor()
-    elseif msg == "quest" or msg == "tracker" then
-        -- Enable quest tracker customization if not already enabled
-        if not FU:Get("scaleQuestTracker") then
-            FU:Set("scaleQuestTracker", true)
-            if FU.optionsPanel and FU.optionsPanel.refresh then
-                FU.optionsPanel.refresh()
-            end
-        end
-        FU:ToggleQuestTrackerAnchor()
-    elseif msg == "warn" or msg == "warning" then
-        -- Enable raid warning customization if not already enabled
-        if not FU:Get("scaleRaidWarnings") then
-            FU:Set("scaleRaidWarnings", true)
-            if FU.optionsPanel and FU.optionsPanel.refresh then
-                FU.optionsPanel.refresh()
-            end
-        end
-        FU:ToggleRaidWarningAnchor()
-    elseif msg == "reset" then
+    if msg == "reset" then
         FU:ResetToDefaults()
         if FU.optionsPanel and FU.optionsPanel.refresh then
             FU.optionsPanel.refresh()
@@ -215,6 +195,8 @@ SlashCmdList.FRAMEUNLOCKER = function(msg)
         FU:ApplyAllSettings()
         FU:Print("Settings reset to defaults.")
     else
+        -- Everything else (including options/config/settings and no argument)
+        -- opens the settings panel; per-feature moving is done from there.
         FU:OpenOptions()
     end
 end
