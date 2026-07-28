@@ -3,7 +3,7 @@
 ## What this is
 A World of Warcraft addon (Lua) that unlocks and repositions UI frames Blizzard normally locks. Written and maintained by Ketch (Andrew). Published on CurseForge.
 
-**Current version:** 1.6.0  
+**Current version:** 1.6.1  
 **TOC interface versions:** Retail 120007, TBC Anniversary 20506, Classic Era 11509
 
 ## File map

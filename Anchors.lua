@@ -286,28 +286,40 @@ function FU:ApplyLootFramePosition()
     local y = self:Get("lootFrameY")
     if not x or x == false or not y or y == false then return end
 
-    if GroupLootContainer then
+    local c = GroupLootContainer
+    if c then
         -- Flag prevents the SetPoint hook below from re-triggering us
         self.lootFrameRepositioning = true
-        GroupLootContainer:ClearAllPoints()
+
+        -- GroupLootContainer is a managed frame (UIParentBottomManagedFrameTemplate):
+        -- its OnShow re-adds itself to the bottom managed layout, which snaps it back
+        -- to the default spot every time a roll appears (the stutter). Detach it so
+        -- our position sticks -- ignoreFramePositionManager makes AddManagedFrame
+        -- skip it, and RemoveManagedFrame pulls it out of the layout right now.
+        c.ignoreFramePositionManager = true
+        if c.layoutParent and c.layoutParent.RemoveManagedFrame then
+            c.layoutParent:RemoveManagedFrame(c)
+        end
+
+        c:ClearAllPoints()
         -- BOTTOM, so the stack grows upward as rolls accumulate (see saveLootPosition)
-        local ox, oy = ScaledOffset(GroupLootContainer, x, y)
-        GroupLootContainer:SetPoint("BOTTOM", UIParent, "CENTER", ox, oy)
+        local ox, oy = ScaledOffset(c, x, y)
+        c:SetPoint("BOTTOM", UIParent, "CENTER", ox, oy)
         self.lootFrameRepositioning = false
     end
 end
 
 local function ResetLootContainerToDefault()
-    if not GroupLootContainer then return end
+    local c = GroupLootContainer
+    if not c then return end
 
-    -- Re-anchor explicitly before laying out: Layout() reflows the child roll
-    -- frames but does not necessarily re-anchor the container itself, so clearing
-    -- points without setting one can leave it with no anchor at all.
-    GroupLootContainer:ClearAllPoints()
-    GroupLootContainer:SetPoint("BOTTOM", UIParent, "CENTER", 0, -100)
-
-    if GroupLootContainer.Layout then
-        GroupLootContainer:Layout()
+    -- Hand the container back to Blizzard's managed layout.
+    c.ignoreFramePositionManager = nil
+    c:ClearAllPoints()
+    if c.layoutParent and c.layoutParent.AddManagedFrame and c:IsShown() then
+        c.layoutParent:AddManagedFrame(c)  -- re-anchor to the managed default now
+    else
+        c:SetPoint("BOTTOM", UIParent, "CENTER", 0, -100)  -- fallback until next roll
     end
 end
 

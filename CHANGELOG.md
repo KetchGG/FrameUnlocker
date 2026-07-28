@@ -1,5 +1,9 @@
 # Changelog
 
+## Version 1.6.1
+### Bug Fixes
+- **Loot roll position stutter** - Repositioned loot roll frames no longer snap back to the default spot when a roll appears. The loot container is one of Blizzard's managed frames, which re-anchored it to default on every update; it's now detached from that managed layout while repositioned (and handed back on reset), the same way the quest tracker is.
+
 ## Version 1.6.0
 ### Bug Fixes
 - **Combat-safe frame repositioning** - Arena/flag-carrier frames and the objective tracker are secure/managed and can't be moved during combat (doing so was blocked and tainted the addon). Both repositioning *and* resetting these frames is now queued during combat and applied automatically when combat ends.
