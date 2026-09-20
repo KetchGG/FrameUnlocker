@@ -4,7 +4,7 @@
 A World of Warcraft addon (Lua) that unlocks and repositions UI frames Blizzard normally locks. Written and maintained by Ketch (Andrew). Published on CurseForge.
 
 **Current version:** 1.6.1  
-**TOC interface versions:** Retail 120007, TBC Anniversary 20506, Classic Era 11509
+**TOC interface versions:** Retail 120100, TBC Anniversary 20506, Classic Era 11509, WoW Forever 16001
 
 ## File map
 
@@ -13,13 +13,14 @@ A World of Warcraft addon (Lua) that unlocks and repositions UI frames Blizzard 
 | `Config.lua` | Addon namespace setup, `FU.defaults`, `FU:InitDB()`, `FU:Get()`, `FU:Set()`, `FU:ResetToDefaults()` |
 | `Chat.lua` | Chat frame unlock/lock — drag by tab, resize from corner (`FU:UnlockChatFrame` / `FU:LockChatFrame`) |
 | `Frames.lua` | Scale-only features (no repositioning): raid and party frames (`FU:ApplyRaidFrameScale` / `ApplyPartyFrameScale`) |
-| `Anchors.lua` | Repositionable features via draggable anchors: loot rolls, arena/flag carriers, quest tracker, raid warnings, below-minimap widgets (`UIWidgetBelowMinimapContainerFrame`). Shared `CreatePositionAnchor` factory + shared `HookFramePosition` + shared `ScaledOffset` (scale-corrects saved offsets); per-feature `Create/Show/Hide/Toggle*Anchor`, `Apply*Scale`/`Apply*Position`, `Reset*`, `Hook*Position`. **Note:** the top-center widget container (`UIWidgetTopCenterContainerFrame`) is deliberately NOT supported — its widgets anchor to `UIParent` (not the container), so moving the container repositions nothing; other addons cover that frame. |
+| `Anchors.lua` | Repositionable features via draggable anchors: loot rolls, arena/flag carriers, quest tracker, raid warnings, below-minimap widgets (`UIWidgetBelowMinimapContainerFrame`). Shared `CreatePositionAnchor` factory + shared `HookFramePosition` + shared `ScaledOffset` (scale-corrects saved offsets); per-feature `Create/Show/Hide/Toggle*Anchor`, `Apply*Scale`/`Apply*Position`, `Reset*`, `Hook*Position`. Also the combined bag frame (`ContainerFrameCombinedBags`, Retail-only): unlike the anchor-based features, it's dragged directly and continuously while unlocked (`FU:UnlockBagFrame`/`LockBagFrame`, same model as `Chat.lua`) rather than via a proxy anchor — position is saved on drag-stop and restored via `FU:ApplyBagFramePosition` + `HookBagFramePosition` (shares the `HookFramePosition` helper). Not a managed/secure frame, so no combat deferral needed. **Note:** the top-center widget container (`UIWidgetTopCenterContainerFrame`) is deliberately NOT supported — its widgets anchor to `UIParent` (not the container), so moving the container repositions nothing; other addons cover that frame. |
 | `Core.lua` | Shared utilities: `FU:Print()`, `FU:ApplyAllSettings()`, and **combat deferral** (`FU:InCombat`, `FU:DeferToCombatEnd(key, fn)`, `FU:FlushCombatDeferred()`) for secure/managed frames that can't be moved during combat |
 | `Options.lua` | Blizzard settings panel UI (`FU:CreateOptionsPanel()`, `FU:OpenOptions()`, `FU:CloseOptions()`). Handles both modern `Settings` API and legacy `InterfaceOptions_AddCategory`. A `scaleControls` descriptor drives `panel.refresh`. Also `FU:SetupEditModeExtras()` — injects a compact control beneath the Edit Mode dialog: a scale slider for raid/party unit frames, an unlock checkbox for the chat frame (taint-safe: UIParent-parented, anchored to the dialog, post-hook only, non-protected actions only) |
 | `Init.lua` | Event frame, `ADDON_LOADED` / `PLAYER_LOGIN` startup, throttled event handlers, `PLAYER_REGEN_ENABLED` (flushes combat-deferred work), slash commands |
-| `FrameUnlocker.toc` | Retail (12.0.x) |
+| `FrameUnlocker.toc` | Retail (12.1.x) |
 | `FrameUnlocker_TBC.toc` | TBC Anniversary (2.5.x) |
 | `FrameUnlocker_Vanilla.toc` | Classic Era / HC / SoD (1.15.x) |
+| `FrameUnlocker_Forever.toc` | WoW Forever (1.60.x) |
 
 Load order: Config → Chat → Frames → Anchors → Core → Options → Init.
 
@@ -35,9 +36,34 @@ All files share `local addonName, FU = ...`. `FU` is the addon table. `_G.FrameU
 
 ## Supported WoW clients and compatibility rules
 All clients share the same Lua files; only the TOC differs. Never branch on the client — use feature detection. Compatibility facts below are **not authoritative to branch on**; they only explain what tends to differ so you know what to feature-detect.
-- **Retail** (12.0.x) — full feature set. Uses `Settings` API, `EditModeManagerFrame`, `CompactRaidFrameContainer.ApplyToFrames` (mixin method), `BackdropTemplateMixin`, `PartyFrame`.
+- **Retail** (12.1.x) — full feature set. Uses `Settings` API, `EditModeManagerFrame`, `CompactRaidFrameContainer.ApplyToFrames` (mixin method), `BackdropTemplateMixin`, `PartyFrame`.
 - **TBC Anniversary** (2.5.x) — same Lua files. Most features work.
 - **Classic Era** (1.15.x) — same Lua files. As of **1.15.9** Era gained `EditModeManagerFrame` and the `Settings` API, so the Edit Mode hook and modern options panel now run here too (previously dormant). Still no `PartyFrame` (`PartyMemberFrame1..4` instead). `CompactRaidFrameContainer` has **no mixin** — its methods are globals (`CompactRaidFrameContainer_ApplyToFrames(self, ...)`), so `CompactRaidFrameContainer.ApplyToFrames` is nil there; `Init.lua` hooks the global by name in that case.
+- **WoW Forever** (1.60.x, interface 16001) — new client line, launched beta 2026-09-17. Early community findings (forever-addon-kit) say it runs on the **Retail 12.x engine** (`WOW_PROJECT_ID == WOW_PROJECT_MAINLINE`, full `C_*` namespaces, old Classic globals like `GetSpellInfo` absent) with Classic-era content — not the Era codebase as first reported. **Unverified by us in-game** — don't assume parity with either Era or Retail; check `if SomeFrame then` as always and update this note once tested.
+  - **SavedVariables bug (beta build 1.60.1), verified in-game 2026-09-19:** the
+    client writes SavedVariables but never reads back the **account-wide** table,
+    so `FrameUnlockerDB` arrives nil every session (a hand-seeded account file
+    stayed nil through main chunk/`ADDON_LOADED`/`PLAYER_LOGIN`).
+    **`SavedVariablesPerCharacter` does load** -- but only within a running client:
+    a per-character table came back carrying the previous logout's value after a
+    logout->login, and came back empty after a client restart. So `Config.lua`
+    keeps a copy of the DB in `FrameUnlockerCharDB` and restores from it when the
+    account table is empty (`FU.restoredFromMirror`); a loaded account DB always
+    wins, so this is inert on every other client. **Verified scope:** the backup
+    persists across `/reload` and logging out to character select, but **not** a full
+    client exit -- on a cold start every addon comes up on defaults, because the
+    client only reads SavedVariables files at launch and that path is broken for both
+    account-wide and per-character tables. No addon-side fix exists for that case
+    (Leatrix Plus, 1.60.03, ships a manual file-deletion workaround with the same
+    ceiling and notes Blizzard will fix the bug).
+    Consequence on the buggy client: settings are per character, and a cold start
+    still starts from defaults.
+  - **Dead ends, don't retry:** addon-registered **CVars are never written to disk**
+    on that build (`config-cache.wtf` untouched after sessions that set them), so a
+    CVar mirror only survives `/reload`. And **the client ignores the `_Forever`
+    TOC suffix** — it loads the base `FrameUnlocker.toc`, confirmed with an
+    `X-TocFlavor` metadata probe, which is why that TOC now leads with
+    `## Interface: 16001, 120100`. `## LoadSavedVariablesFirst: 1` changed nothing.
 
 Compatibility approach: **feature detection, not version checks**. Check `if SomeFrame then` before using it. Never hardcode version numbers in Lua. Because everything is feature-detected, don't delete a compatibility fallback just because the current clients no longer need it — it costs nothing and guards other/older clients (SoD, HC, unpatched).
 
@@ -112,7 +138,7 @@ On reset, restore `isManagedFrame = true`, `isRightManagedFrame = true`, and rep
 No npm, no compilation, no test runner. Testing requires loading in WoW. When suggesting changes, remember there is no automated way to verify correctness — be precise and conservative.
 
 ## Versioning
-- Version bumped in all three TOC files simultaneously (they must match): `.toc`, `_TBC`, `_Vanilla`.
+- Version bumped in all four TOC files simultaneously (they must match): `.toc`, `_TBC`, `_Vanilla`, `_Forever`.
 - CHANGELOG.md is maintained manually per release.
 
 ## Slash commands

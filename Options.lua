@@ -202,18 +202,18 @@ function FU:CreateOptionsPanel()
     end
 
     ---------------------------------------------------------------------
-    -- Chat Frames Section
+    -- Draggable Frames Section (Chat, Combined Bags)
     ---------------------------------------------------------------------
 
     local chatHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     chatHeader:SetPoint("TOPLEFT", COL1, yOffset)
-    chatHeader:SetText("Chat Frames")
+    chatHeader:SetText("Draggable Frames")
     chatHeader:SetTextColor(1, 0.82, 0)
     yOffset = yOffset - 18
     CreateDivider(panel, yOffset)
     yOffset = yOffset - 12
 
-    -- Chat unlock
+    -- Chat unlock (column 1)
     local chatCheck = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
     chatCheck:SetPoint("TOPLEFT", COL1, yOffset)
     chatCheck.Text:SetText("Unlock chat frame")
@@ -230,6 +230,36 @@ function FU:CreateOptionsPanel()
     local chatDesc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     chatDesc:SetPoint("TOPLEFT", COL1 + 26, yOffset - 20)
     chatDesc:SetText("|cff888888Drag by tab, resize from corner|r")
+
+    -- Combined bag frame unlock (column 3, Retail only) -- direct-drag like the
+    -- chat frame, not scale/anchor-based, so it's a plain checkbox + description.
+    -- Column 3 (not 2) because the chat description above is a full sentence
+    -- that needs more than the usual 139px column gap to avoid overlapping it.
+    local bagFrameCheck = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    bagFrameCheck:SetPoint("TOPLEFT", COL3, yOffset)
+    bagFrameCheck.Text:SetText("Unlock combined bags*")
+    bagFrameCheck:SetScript("OnClick", function(self)
+        local checked = self:GetChecked() and true or false
+        -- Set() runs before touching the live frame so the choice is saved even
+        -- if the frame manipulation below errors (see the pcall in Init.lua's
+        -- ReapplyScaling for why that's a real possibility with this frame).
+        FU:Set("unlockBagFrame", checked)
+        local ok, err = pcall(function()
+            if checked then
+                FU:UnlockBagFrame()
+                FU:ApplyBagFramePosition()
+            else
+                FU:LockBagFrame()
+            end
+        end)
+        if not ok then
+            FU:Print("|cffff0000Combined bag frame error:|r " .. tostring(err))
+        end
+    end)
+
+    local bagFrameDesc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    bagFrameDesc:SetPoint("TOPLEFT", COL3 + 26, yOffset - 20)
+    bagFrameDesc:SetText("|cff888888Drag by the header|r")
 
     yOffset = yOffset - 50
 
@@ -415,6 +445,7 @@ function FU:CreateOptionsPanel()
     panel.belowMinimapSlider = belowMinimapSlider
     panel.belowMinimapSliderLabel = belowMinimapSliderLabel
     panel.belowMinimapAnchorButton = belowMinimapAnchorButton
+    panel.bagFrameCheck = bagFrameCheck
 
     ---------------------------------------------------------------------
     -- Refresh function to sync UI with saved settings
@@ -441,6 +472,7 @@ function FU:CreateOptionsPanel()
     panel.refresh = function()
         isRefreshing = true
         chatCheck:SetChecked(FU:Get("unlockChat"))
+        bagFrameCheck:SetChecked(FU:Get("unlockBagFrame"))
         for _, c in ipairs(scaleControls) do
             local enabled = FU:Get(c.enable)
             c.check:SetChecked(enabled)

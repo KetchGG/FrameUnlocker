@@ -27,6 +27,11 @@ Each of these can be scaled from 50% to 150%; the repositionable ones also get a
 - **Quest Tracker** and **Below-Minimap Widgets** are removed from Blizzard's managed layout while repositioned to prevent flickering.
 - Repositioning stays aligned to your anchor at any scale, and adjusting the scale keeps the frame put.
 
+### Combined Bag Frame (Retail)
+- Unlock the combined bags to drag them anywhere, the same way as the chat frame
+- Position is remembered between sessions
+- Retail only — other clients use individual bag frames
+
 ### Edit Mode Integration
 When you select a frame in Blizzard's Edit Mode, a matching FrameUnlocker control appears beneath its dialog:
 - **Raid Frames / Party Frames** → a scale slider
@@ -58,3 +63,14 @@ Per-frame moving is done from the Move buttons in the settings panel.
 - Retail (Midnight)
 - TBC Anniversary
 - Classic Era (Hardcore / Season of Discovery)
+- WoW Forever
+
+## WoW Forever beta note
+
+The Forever beta client (1.60.x) has a bug where it doesn't read addon settings
+files back when it starts, so **settings reset every time you fully close the
+game**. FrameUnlocker works around as much of this as an addon can: your
+settings are also saved per character and restored automatically, so they survive
+`/reload` and logging out to character select. Restoring after a full client exit
+isn't something an addon can fix — Blizzard has said they'll fix the underlying
+bug. Other clients are unaffected.

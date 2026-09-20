@@ -50,6 +50,26 @@ local function ReapplyScaling()
         FU:ApplyBelowMinimapScale()
     end
     FU:ApplyBelowMinimapPosition()
+
+    -- ContainerFrameCombinedBags isn't guaranteed to exist yet at PLAYER_LOGIN
+    -- (unlike the frames above, which are always-present FrameXML elements), so
+    -- unlocking/hooking it lives here rather than as a one-shot PLAYER_LOGIN call
+    -- -- this function also re-runs on PLAYER_ENTERING_WORLD, giving it another
+    -- chance to attach once the frame actually exists. Wrapped in pcall so a
+    -- failure here (this is the newest, least-tested code path) can't take down
+    -- ReapplyScaling's caller mid-function -- PLAYER_LOGIN calls this directly,
+    -- and everything after that call (event registration, EditMode extras) would
+    -- silently never run if this threw uncaught.
+    local ok, err = pcall(function()
+        if FU:Get("unlockBagFrame") then
+            FU:UnlockBagFrame()
+        end
+        FU:ApplyBagFramePosition()
+        FU:HookBagFramePosition()
+    end)
+    if not ok then
+        FU:Print("|cffff0000Combined bag frame error:|r " .. tostring(err))
+    end
 end
 
 ---------------------------------------------------------------------
@@ -141,6 +161,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         end
 
         FU:Print("Initialized. Type /fu for options.")
+        if FU.restoredFromMirror then
+            FU:Print("SavedVariables didn't load (WoW Forever beta bug) -- settings restored from backup.")
+        end
 
     elseif event == "GROUP_ROSTER_UPDATE" then
         -- Reapply party/raid scaling when group composition changes (throttled)

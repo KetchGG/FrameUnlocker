@@ -53,4 +53,19 @@ function FU:ApplyAllSettings()
     self:ApplyRaidWarningPosition()
     self:ApplyBelowMinimapScale(self:Get("scaleBelowMinimap") and self:Get("belowMinimapScale") or 1.0)
     self:ApplyBelowMinimapPosition()
+
+    -- Wrapped in pcall so a bag-frame-specific failure (this is the newest,
+    -- least-tested code path) can't prevent the caller's own follow-up code
+    -- (e.g. the "/fu reset" confirmation message) from running.
+    local ok, err = pcall(function()
+        if self:Get("unlockBagFrame") then
+            self:UnlockBagFrame()
+            self:ApplyBagFramePosition()
+        else
+            self:LockBagFrame()
+        end
+    end)
+    if not ok then
+        self:Print("|cffff0000Combined bag frame error:|r " .. tostring(err))
+    end
 end

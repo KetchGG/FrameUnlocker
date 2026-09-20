@@ -999,3 +999,96 @@ function FU:HookBelowMinimapPosition()
         apply = FU.ApplyBelowMinimapPosition, delay = 0,
     })
 end
+
+---------------------------------------------------------------------
+-- Combined Bag Frame Unlock (direct drag, like the chat frame)
+--
+-- Unlike the anchor-based features above, this frame is dragged directly and
+-- continuously while unlocked -- there's no proxy anchor to show/hide, matching
+-- FU:UnlockChatFrame's model (Chat.lua) rather than CreatePositionAnchor's.
+-- ContainerFrameCombinedBags only exists on Retail (the combined-bags view);
+-- Classic Era/TBC/Forever show individual ContainerFrame1..N instead, which
+-- this feature deliberately does not cover. It isn't secure or part of
+-- Blizzard's managed frame layout, so no combat deferral or isManagedFrame
+-- juggling is needed, unlike the quest tracker / below-minimap widgets.
+---------------------------------------------------------------------
+
+local function saveBagFramePosition(frame)
+    local right = frame:GetRight()
+    local bottom = frame:GetBottom()
+    if not right or not bottom then return end
+    FU:Set("bagFrameX", right  - UIParent:GetRight())
+    FU:Set("bagFrameY", bottom - UIParent:GetBottom())
+end
+
+function FU:UnlockBagFrame()
+    local f = ContainerFrameCombinedBags
+    if not f then return end
+
+    f:SetMovable(true)
+    f:SetClampedToScreen(true)
+
+    -- Drag from the header bar (TitleContainer), not the whole frame. The
+    -- header is where players instinctively grab a window to move it, but it
+    -- sits on top of the main frame and is also what opens the Bag Settings
+    -- menu on click -- registering drag on the main frame never saw those
+    -- clicks at all, they resolved as a header click before we got a look.
+    -- RegisterForDrag on the header itself lets WoW tell a real drag apart
+    -- from a plain click, so dragging now moves the frame while a plain click
+    -- still does whatever the header already did. The portrait icon is a
+    -- separate region layered on top of the header and is untouched either way.
+    local header = f.TitleContainer
+    if not header then return end
+
+    header:EnableMouse(true)
+    header:RegisterForDrag("LeftButton")
+
+    -- Only hook once to prevent stacking on repeated calls
+    if not header.FU_BagDragHooked then
+        header:HookScript("OnDragStart", function()
+            if f:IsMovable() then f:StartMoving() end
+        end)
+        header:HookScript("OnDragStop", function()
+            f:StopMovingOrSizing()
+            saveBagFramePosition(f)
+        end)
+        header.FU_BagDragHooked = true
+    end
+end
+
+function FU:LockBagFrame()
+    local f = ContainerFrameCombinedBags
+    if not f then return end
+
+    f:SetMovable(false)
+    if f.TitleContainer then
+        -- Empty args clears all registered drag buttons; HookScript handlers
+        -- remain but are guarded by the IsMovable() check in OnDragStart.
+        f.TitleContainer:RegisterForDrag()
+    end
+end
+
+function FU:ApplyBagFramePosition()
+    if not self:Get("unlockBagFrame") then return end
+
+    local x = self:Get("bagFrameX")
+    local y = self:Get("bagFrameY")
+    if not x or x == false or not y or y == false then return end
+
+    local f = ContainerFrameCombinedBags
+    if not f then return end
+
+    self.bagFrameRepositioning = true
+    f:ClearAllPoints()
+    f:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", x, y)
+    self.bagFrameRepositioning = false
+end
+
+function FU:HookBagFramePosition()
+    HookFramePosition({
+        frame = ContainerFrameCombinedBags, hookedFlag = "bagFrameHooked",
+        repositioningFlag = "bagFrameRepositioning", enableKey = "unlockBagFrame",
+        xKey = "bagFrameX", yKey = "bagFrameY",
+        apply = FU.ApplyBagFramePosition, delay = 0,
+    })
+end

@@ -1,5 +1,18 @@
 # Changelog
 
+## Version 1.7.1
+### Bug Fixes
+- **Settings not saving on WoW Forever** - The WoW Forever beta client doesn't read addon settings files back, so every setting reset on `/reload` or relog. Settings are now also saved per character and restored automatically when the account-wide settings come back empty. **Scope:** this covers `/reload` and logging out to character select; a full client exit still starts from defaults, which is a client bug Blizzard has said it will fix and no addon can work around. Other clients are unaffected — their settings always take precedence.
+- **Addon flagged out of date on WoW Forever** - That client ignores the `_Forever` TOC suffix and loads `FrameUnlocker.toc`, so it saw the Retail interface version and marked the addon out of date. The Retail TOC now declares `## Interface: 16001, 120100`, covering both.
+
+## Version 1.7.0
+### New Features
+- **WoW Forever support** - Added `FrameUnlocker_Forever.toc` (interface 16001) for Blizzard's new WoW Forever client, which entered beta 2026-09-17. Same Lua files as the other clients; no code changes were needed since compatibility is handled entirely by feature detection.
+- **Combined bag frame unlock** - The combined bag frame can now be unlocked and dragged freely at any time, same as the chat frame, with its position remembered across sessions. Retail-only, since Classic Era/TBC/Forever use individual bag frames instead of the combined view.
+
+### Bug Fixes
+- **Stale Retail interface version** - `FrameUnlocker.toc` still declared interface 120007 (12.0.7) after Retail patched to 12.1.0; bumped to 120100 so the addon isn't flagged out of date.
+
 ## Version 1.6.1
 ### Bug Fixes
 - **Loot roll position stutter** - Repositioned loot roll frames no longer snap back to the default spot when a roll appears. The loot container is one of Blizzard's managed frames, which re-anchored it to default on every update; it's now detached from that managed layout while repositioned (and handed back on reset), the same way the quest tracker is.
